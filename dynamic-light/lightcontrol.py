@@ -1,3 +1,5 @@
+#! /usr/bin/python3
+
 import lifxlan
 from lifxlan import LifxLAN
 from shadeclient import ShadeClient
