@@ -13,6 +13,10 @@ serial:
 
 
 lights: [
-  # light1: {address: 0xb175, endpoint: 0x40}, 
-  light2: {address: 0x4748, endpoint: 0x40}
+  light1: {address: 0x4b9f, endpoint: 0x40}, 
+  light2: {address: 0x27f4, endpoint: 0x40}
+]
+
+groups: [
+  group1: {address: 0xaaab, endpoint: 0x40}
 ]

@@ -1,3 +1,6 @@
+from utils import PARITY_CONSTANTS, BYTE_SIZE_CONSTANTS, STOP_BITS_CONSTANTS
+import utils
+
 class Light():
 	def __init__(self, address, endpoint, controller, is_group=False):
 		self.address = address
@@ -9,7 +12,9 @@ class Light():
 			self.address_mode = 0x02
 		self.state = -1
 		self.level = -1
-		self.device = controller.get_device()
+
+		self.controller = controller
+		self.device = self.controller.get_device()
 
 	def get_on_off_toggle_data(self, command):
 		
@@ -36,26 +41,31 @@ class Light():
 		data = [msg_type_msb, msg_type_lsb, length_msb, length_lsb, checksum] + content
 		return data
 
-	def off(self):
+	def off(self, print_return=False):
 		data = self.get_on_off_toggle_data(command=0x0)
 		bytes_to_send = utils.create_byte_stream_to_send(data_bytes=data)
 		self.device.write(bytes_to_send)
-		# rsp = [self.synchronous_read()]
-		# return rsp
+		if print_return:
+			rsp = [self.synchronous_read(), self.synchronous_read()]
+			print (rsp)
 
-	def on(self):
+	def on(self, print_return=False):
 		data = self.get_on_off_toggle_data(command=0x01)
 		bytes_to_send = utils.create_byte_stream_to_send(data_bytes=data)
 		self.device.write(bytes_to_send)
-		# rsp = [self.synchronous_read()]
-		# return rsp
+		if print_return:
+			rsp = [self.synchronous_read(), self.synchronous_read()]
+			print (rsp)
 
-	def toggle(self):
+	def toggle(self, print_return=False):
 		data = self.get_on_off_toggle_data(command=0x02)
 		bytes_to_send = utils.create_byte_stream_to_send(data_bytes=data)
-		self.device.write(bytes_to_send)	
+		self.device.write(bytes_to_send)
+		if print_return:
+			rsp = [self.synchronous_read(), self.synchronous_read()]
+			print (rsp)
 
-	def set_level(self, level, transition_time=1, with_on_off=True):
+	def set_level(self, level, transition_time=1, with_on_off=True, print_return=False):
 
 		msg_type = 0x0081
 		msg_type_list = utils.convert_int16_msb_lsb_list(msg_type)
@@ -89,5 +99,18 @@ class Light():
 		data = [msg_type_msb, msg_type_lsb, length_msb, length_lsb, checksum] + content
 		bytes_to_send = utils.create_byte_stream_to_send(data_bytes=data)
 		self.device.write(bytes_to_send)
-		# rsp = [self.synchronous_read(), self.synchronous_read()]
-		# return rsp
+
+		if print_return:
+			rsp = [self.synchronous_read(), self.synchronous_read()]
+			print (rsp)
+
+	def synchronous_read(self):
+		line = self.device.read()
+		read_bytes = []
+
+		while line != b'\x03':
+			read_bytes.append(line)
+			line = self.device.read()
+		
+		read_bytes.append(line)
+		return read_bytes
