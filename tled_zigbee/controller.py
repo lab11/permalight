@@ -31,7 +31,7 @@ class Controller(Thread):
 	def get_device(self):
 		return self.device
 
-	def permit_joining(self):
+	def permit_joining(self, interval = 0x0f):
 		msg_type = 0x0049
 		msg_type_list = utils.convert_int16_msb_lsb_list(msg_type)
 		msg_type_msb = msg_type_list['msb']
@@ -42,7 +42,6 @@ class Controller(Thread):
 		target_short_address_msb = target_short_address_list['msb']
 		target_short_address_lsb = target_short_address_list['lsb']
 
-		interval = 0xff
 		tcsignificance = 0x0
 
 		content = [target_short_address_msb, target_short_address_lsb, interval, tcsignificance]
@@ -57,16 +56,16 @@ class Controller(Thread):
 
 		bytes_to_send = utils.create_byte_stream_to_send(data_bytes=data)
 		self.device.write(bytes_to_send)
-		print(bytes_to_send)
+		print("permit joining: ",bytes_to_send)
 
-	def synchronous_read(self):
+	def get_input(self):
 		read_bytes = []
 		# while line != b'\x03':
 		while True:
 			line = self.device.read()
 			read_bytes.append(line)
-
 			if line == b'\x03':
+			
 				final_bytes = []
 				i = 1
 				while i < len(read_bytes)-1:
@@ -81,11 +80,12 @@ class Controller(Thread):
 
 				print(final_bytes)
 
-				if final_bytes[0] == 0 and final_bytes[1] == 0x4d and final_bytes[2] == 0x0 and final_bytes[3] == 0x0b:
-					print("short address = ", final_bytes[5], final_bytes[6])
+				# if final_bytes[0] == 0 and final_bytes[1] == 0x4d and final_bytes[2] == 0x0 and final_bytes[3] == 0x0b:
+				# 	print("short address = ", final_bytes[5], final_bytes[6])
+				# print("serial read: ",read_bytes)
 				read_bytes = []
 
-	def add_groups(self, light_address, light_ep, group_address):
+	def add_groups(self, light_address, light_ep, group_address, group_name_length=0x10, group_name_max_length=0x1, group_name=0x61):
 		msg_type = 0x0060
 		msg_type_list = utils.convert_int16_msb_lsb_list(msg_type)
 		msg_type_msb = msg_type_list['msb']
@@ -102,7 +102,7 @@ class Controller(Thread):
 		group_address_msb = group_address_list['msb']
 		group_address_lsb = group_address_list['lsb']
 
-		content = [address_mode, destn_msb, destn_lsb, source_ep, light_ep, group_address_msb, group_address_lsb]
+		content = [address_mode, destn_msb, destn_lsb, source_ep, light_ep, group_address_msb, group_address_lsb, group_name_length, group_name_max_length, group_name]
 		length = utils.convert_int16_msb_lsb_list(len(content))
 		length_msb = length['msb']
 		length_lsb = length['lsb']
@@ -116,4 +116,4 @@ class Controller(Thread):
 
 
 	def run(self):
-		self.synchronous_read()
+		self.get_input()
