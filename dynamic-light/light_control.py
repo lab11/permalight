@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
 
-#import lifxlan
-#from lifxlan import LifxLAN
-#from shadeclient import ShadeClient
-#from shade_config import shade_config
 import paho.mqtt.client as mqtt
 from PID import PID
 from enum import Enum
@@ -11,9 +7,13 @@ import numpy as np
 import time
 import pickle
 import json
-from lightsensor import LightSensor
 import os.path
 import datetime
+from light_sensor import LightSensor
+import importlib.util
+spec = importlib.util.spec_from_file_location("Light", "../tled_zigbee/light.py")
+Light = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(Light)
 
 class LightControl:
     class State(Enum):
@@ -84,7 +84,7 @@ class LightControl:
             # get handles to known lights
             for label in known_lights:
                 #TODO some mechanism to discover/create light, if needed
-
+                pass
         # generate PID for each light
         for light in self.lights:
             #TODO might need to alter these parameters
@@ -236,7 +236,7 @@ class LightControl:
         print('updating light: ' + light.address + ' and sensor: ' + sensor)
         if light_to_update is None:
             print('this light is wonky')
-            continue
+            return
         #TODO if light is off
         if light_to_update.state == 0:
             #TODO turn light on
@@ -270,7 +270,7 @@ sensor_list = [
 #        #"F0:8A:FB:BC:E9:82",
 #        ]
 
-lightcontrol = LightControl("128.32.171.51")
+lightcontrol = LightControl("34.218.46.181")
 #TODO add inputs for lights, mapping of sensors to lights
 lightcontrol.discover(None, sensor_list)
 #print(lightcontrol.lights)
