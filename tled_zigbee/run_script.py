@@ -25,12 +25,14 @@ for light in config['groups']:
 
 # controller.start()
 # light1 = light_objects['light1']
-light1 = objects['group1']
+group1 = objects['group1']
+group2 = objects['group2']
 # light2 = light_objects['light2']
 # light1.set_level(0x0)
 # light2.set_level(0xf0)
 # light1.on()
-light1.toggle()
+group1.toggle()
+group2.toggle()
 
 # controller.synchronous_read()
 # controller.synchronous_read()
