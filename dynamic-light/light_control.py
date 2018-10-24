@@ -78,6 +78,10 @@ class LightControl:
             pid = PID(0.1, 0, 0)
             pid.SetPoint = self.lower_bound_lux
             self.pid_controllers[light_id] = pid
+            # if light is off
+            if self.lights[light_id].state != 1:
+                self.lights[light_id].on()
+                self.lights[light_id].set_level(100)
 
         if sensor_list is not None:
             for sensor_id in sensor_list:
@@ -190,10 +194,6 @@ class LightControl:
     def _update_light(self, sensor_id):
         light_to_update = self.sensors_to_lights[sensor_id]
         print('updating light: ' + hex(light_to_update.address) + ' and sensor: ' + sensor_id)
-        # if light is off
-        if light_to_update.state != 1:
-            light_to_update.on()
-            light_to_update.set_level(100)
         pid = self.pid_controllers[hex(light_to_update.address).replace('0x', '')]
         pid.update(self.sensors[sensor_id].lux)
         brightness = light_to_update.level
