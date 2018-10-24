@@ -1,0 +1,26 @@
+serial:
+  baud_rate: 1000000
+  serial_port: /dev/ttyUSB0
+  # parity could be even/odd/none/mark/space
+  parity: none
+  # stop_bits could be 1/1.5/2
+  stop_bits: 1
+  # byte_size could be 5/6/7/8
+  byte_size: 8
+  # flow_control could be true/false
+  flow_control: True
+  timeout: 1
+
+sensors: [
+  'c098e5110015',
+  'c098e5110017',
+]
+
+groups: [
+  group1: {address: 0xaaac, endpoint: 0x40},
+  group2: {address: 0xaaad, endpoint: 0x40}
+]
+
+map:
+  'c098e5110015': 'aaac'
+  'c098e5110017': 'aaad'

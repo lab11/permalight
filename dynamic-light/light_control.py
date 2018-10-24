@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+import sys
+import traceback
 import paho.mqtt.client as mqtt
 from PID import PID
 from enum import Enum
@@ -9,11 +11,11 @@ import pickle
 import json
 import os.path
 import datetime
+import yaml
 from light_sensor import LightSensor
-import importlib.util
-spec = importlib.util.spec_from_file_location("Light", "../tled_zigbee/light.py")
-Light = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(Light)
+sys.path.append('../tled_zigbee/')
+from controller import Controller
+from light import Light
 
 class LightControl:
     class State(Enum):
@@ -26,10 +28,10 @@ class LightControl:
     def __init__(self, mqtt_address):
         self.state = self.State.IDLE
 
-        self.lights = []
         # dict mapping of sensor id (string) to sensor object
         self.sensors = {}
-        self.sensor_whitelist = []
+        # dict mapping of light id to light object
+        self.lights = {}
         # dict mapping of sensor id (string) to light object
         self.sensors_to_lights = {}
         # keep track of sensors seen during
@@ -39,14 +41,8 @@ class LightControl:
         #self.current_shade = None
         self.current_brightness = None
 
-        #self.upper_bound_lux = 800
-        self.hyster = 100
         self.lower_bound_lux = 100
         self.pid_controllers = {}
-
-        #TODO set up lights here
-        #self.lan = LifxLAN()
-        #self.shade_client = ShadeClient(shade_config)
 
         self.mqtt_client = mqtt.Client()
         self.mqtt_client.on_connect = self.on_connect
@@ -55,62 +51,69 @@ class LightControl:
         self.mqtt_client.connect(mqtt_address)
         self.mqtt_client.loop_start()
 
-    def discover(self, light_list, sensor_list):
-        # discover lights, shades, sensors
-        #TODO light list may exist as yaml config instead
-        have_light_file = os.path.isfile('sensor_light_mappings.pkl') and \
-                os.path.getsize('sensor_light_mappings.pkl') > 0
+    def discover(self, light_list, sensor_list, sensor_light_map):
+        # discover lights, sensors, existing mapping
+        # do we have a saved python dict from characterization?
+        #have_char_light_file = os.path.isfile('sensor_light_mappings.pkl') and \
+        #        os.path.getsize('sensor_light_mappings.pkl') > 0
 
-        # if we don't already have a set of lights we're interested in,
-        # discover all lights
-        if light_list is None and not have_light_file:
-            #TODO some mechanism to discover TLED lights
-            #We can just use predefined lists instead
-            print("no lights supplied")
-            exit(1)
-        # otherwise, generate from saved mappings or use light file
+        # if we already have a light list
+        if light_list is not None:
+            for light in light_list:
+              for name in light:
+                self.lights[hex(light[name]['address']).replace('0x','')] = Light(address=light[name]['address'], endpoint=light[name]['endpoint'], controller=controller, is_group=True)
         else:
-            known_lights = []
-            # if we already have a generated mapping to lights (created during characterization):
-            if have_light_file:
-                with open('sensor_light_mappings.pkl', 'rb') as f:
-                    self.sensors_to_lights = pickle.load(f)
-                for sensor_id in self.sensors_to_lights:
-                    if self.sensors_to_lights[sensor_id] is not None:
-                        known_lights.append(self.sensors_to_lights[sensor_id])
-            # otherwise we just use lights in supplied light list
-            else:
-                known_lights = light_list
-            # get handles to known lights
-            for label in known_lights:
-                #TODO some mechanism to discover/create light, if needed
-                pass
+            #TODO some way to discover lights?
+            print("no lights supplied!")
+            exit(1)
+
+        print('Discovered the following lights:')
+        for light_id in self.lights:
+            print('\t' + light_id)
+
         # generate PID for each light
-        for light in self.lights:
+        for light_id in self.lights:
             #TODO might need to alter these parameters
-            pid = PID(200, 0, 5)
+            pid = PID(0.1, 0, 0)
             pid.SetPoint = self.lower_bound_lux
-            self.pid_controllers[light.label] = pid
+            self.pid_controllers[light_id] = pid
 
-        # set up sensor whitelist
         if sensor_list is not None:
-            self.sensor_whitelist = sensor_list
+            for sensor_id in sensor_list:
+                self.sensors[sensor_id] = LightSensor(sensor_id)
+        else:
+            # start sensor discovery
+            self.state = self.State.DISCOVER
+            # toggle all lights on/off to generate output from sensor
+            # the change in light will cause mqtt messages, and we can generate
+            # list of relavent sensors
+            #TODO turn all lights high
+            time.sleep(5)
+            #TODO turn all lights low
+            time.sleep(5)
+            self.state = self.State.IDLE
 
-        # start sensor discovery
-        self.state = self.State.DISCOVER
-        # toggle all lights on/off to generate output from sensor
-        # the change in light will cause mqtt messages, and we can generate
-        # list of relavent sensors
-        #TODO turn all lights high
-        time.sleep(5)
-        #TODO turn all lights low
-        time.sleep(5)
-        self.state = self.State.IDLE
-
-        # TODO pick sensors out of saved data
+        # TODO pick lights/sensors/mapping out of saved data
         print('Discovered the following sensors:')
         for sensor_id in self.sensors:
             print('\t' + sensor_id)
+
+        # set up sensor-light mapping
+        if sensor_light_map is not None:
+            #TODO read in mapping
+            for sensor_id in sensor_light_map:
+                if sensor_id not in self.sensors:
+                    print('mapped sensor (%s) not one of sensors!' % sensor_id);
+                    continue
+                self.sensors_to_lights[sensor_id] = self.lights[sensor_light_map[sensor_id]]
+        else:
+            # TODO characterization!
+            print("missing mappings!");
+            exit(1)
+
+        print('Discovered the following mappings:')
+        for sensor_id in self.sensors_to_lights:
+            print('\t' + sensor_id + ' <--> ' + hex(self.sensors_to_lights[sensor_id].address))
 
     def _characterize_lights(self):
         # characterize lights
@@ -183,6 +186,31 @@ class LightControl:
             pass
         self._characterize_lights()
 
+    def _update_light(self, sensor_id):
+        light_to_update = self.sensors_to_lights[sensor_id]
+        print('updating light: ' + hex(light_to_update.address) + ' and sensor: ' + sensor_id)
+        # if light is off
+        if light_to_update.state != 1:
+            light_to_update.on()
+            light_to_update.set_level(100)
+        pid = self.pid_controllers[hex(light_to_update.address).replace('0x', '')]
+        pid.update(self.sensors[sensor_id].lux)
+        brightness = light_to_update.level
+        print('brightness setting: %f' % brightness)
+        print('lux sensed: %f' % self.sensors[sensor_id].lux)
+        print('pid output: %f' % pid.output)
+        brightness += pid.output
+        if brightness > 100:
+            brightness = 100
+        elif brightness < 0:
+            brightness = 0
+        try:
+            light_to_update.set_level(brightness)
+            print(hex(light_to_update.address) + ' brightness set to ' + str(brightness) + ' percent at ' + str(datetime.datetime.now()))
+        except Exception as e:
+            print(e)
+            traceback.print_exc()
+
     def start_control_loop(self):
         self.state = self.state.CONTROL
         time.sleep(2)
@@ -196,15 +224,19 @@ class LightControl:
     def on_message(self, client, userdata, msg):
         #print(msg.topic+" "+str(msg.payload) + '\n')
 
-        data = json.loads(msg.payload)
+        data = json.loads(msg.payload.decode('utf-8'))
         # only interested in light_lux messages
         if 'light_lux' not in data:
             return
         device_id = data['_meta']['device_id']
         lux = float(data['light_lux'])
 
-        if len(self.sensor_whitelist) != 0 and device_id not in self.sensor_whitelist:
+        if device_id not in self.sensors and self.state != self.State.DISCOVER:
             return
+
+        print(device_id)
+        print(lux)
+        print()
 
         # state machine for message handling
         if self.state == self.State.IDLE:
@@ -230,50 +262,23 @@ class LightControl:
             self.sensors[device_id].light_char_measurements[self.current_light] = lux
         elif self.state == self.State.CONTROL:
             self.sensors[device_id].lux = lux
+            self._update_light(device_id)
 
-    def _update_light(self, sensor):
-        light_to_update = self.sensors_to_lights[sensor]
-        print('updating light: ' + light.address + ' and sensor: ' + sensor)
-        if light_to_update is None:
-            print('this light is wonky')
-            return
-        #TODO if light is off
-        if light_to_update.state == 0:
-            #TODO turn light on
-            pass
-        pid = self.pid_controllers[light_to_update.address]
-        pid.update(self.sensors[sensor].lux)
-        brightness = light_to_update.level
-        print(brightness)
-        print(self.sensors[sensor].lux)
-        print(pid.output)
-        brightness += pid.output
-        #TODO what is the correct range of light levels for tleds?
-        if brightness > 65535:
-            brightness = 65535
-        elif brightness < 0:
-            brightness = 0
-        #TODO set brightness
-        print(label + ' brightness set to ' + str(brightness/65535*100) + ' percent at ' + str(datetime.datetime.now()))
+CONFIG_FILE = '../config.yaml'
+with open(CONFIG_FILE, 'r') as fp:
+  config = yaml.safe_load(fp)
+sensor_list = config['sensors']
+light_list = config['groups']
+sensor_light_map = config['map']
 
-sensor_list = [
-        'c098e5110015',
-        #'c098e5110008',
-        #'c098e5110006',
-        #'c098e5110007',
-        ]
-#shade_list = [
-#        "F4:21:20:D9:FA:CD",
-#        "DF:93:08:12:38:CF",
-#        #"FD:97:B5:16:08:4F",
-#        #"FE:AF:38:31:AC:C7",
-#        #"F0:8A:FB:BC:E9:82",
-#        ]
+controller = Controller(config_file='../config.yaml')
 
 lightcontrol = LightControl("34.218.46.181")
 #TODO add inputs for lights, mapping of sensors to lights
-lightcontrol.discover(None, sensor_list)
+lightcontrol.discover(light_list, sensor_list, sensor_light_map)
 #print(lightcontrol.lights)
 #print(sorted(lightcontrol.sensors.keys()))
-#lightcontrol.characterize()
 lightcontrol.start_control_loop()
+
+while(1):
+    pass
