@@ -2,6 +2,7 @@
 
 import sys
 import traceback
+import multiprocessing
 import paho.mqtt.client as mqtt
 from PID import PID
 from enum import Enum
@@ -236,7 +237,6 @@ class LightControl:
 
         print(device_id)
         print(lux)
-        print()
 
         # state machine for message handling
         if self.state == self.State.IDLE:
@@ -245,7 +245,6 @@ class LightControl:
             if device_id not in self.sensors:
                 self.sensors[device_id] = LightSensor(device_id)
             self.sensors[device_id].baseline = lux
-            self.sensors[device_id].update_seq_no(seq_no)
 
         elif self.state == self.State.CHAR_LIGHT:
             # only consider devices we've done baseline measurements for
@@ -262,7 +261,17 @@ class LightControl:
             self.sensors[device_id].light_char_measurements[self.current_light] = lux
         elif self.state == self.State.CONTROL:
             self.sensors[device_id].lux = lux
-            self._update_light(device_id)
+            try:
+                p = multiprocessing.Process(target=self._update_light, args=(device_id,))
+                p.start()
+                p.join(5)
+                if p.is_alive():
+                    p.terminate()
+                    p.join()
+            except Exception as e:
+                print(e)
+                traceback.print_exc()
+        print()
 
 CONFIG_FILE = '../config.yaml'
 with open(CONFIG_FILE, 'r') as fp:
