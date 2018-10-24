@@ -1,3 +1,4 @@
+import threading
 
 class LightSensor:
     def __init__(self, device_id):
@@ -5,6 +6,7 @@ class LightSensor:
         self.light_char_measurements = {}
         self.baseline = 0
         self.lux = 0
+        self.motion = 0
         self.last_seq_no = 0
     def __str__(self):
         print_str = self.device_id + '\r\n'

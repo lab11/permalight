@@ -44,6 +44,8 @@ class LightControl:
         self.lower_bound_lux = 100
         self.pid_controllers = {}
 
+        self.motion_timeout = 30*60
+
         self.mqtt_client = mqtt.Client()
         self.mqtt_client.on_connect = self.on_connect
         self.mqtt_client.on_message = self.on_message
@@ -114,6 +116,7 @@ class LightControl:
         print('Discovered the following mappings:')
         for sensor_id in self.sensors_to_lights:
             print('\t' + sensor_id + ' <--> ' + hex(self.sensors_to_lights[sensor_id].address))
+
 
     def _characterize_lights(self):
         # characterize lights
@@ -186,13 +189,23 @@ class LightControl:
             pass
         self._characterize_lights()
 
+    def _motion_watchdog(self, sensor_id):
+        # TODO if haven't seen motion since last time, turn off associated light
+        if self.sensors[sensor_id].motion == 0:
+            self.sensors_to_lights[sensor_id].off()
+        self.sensors[sensor_id].motion = 0
+        threading.Timer(self.motion_timeout, motion_watchdog, [sensor_id]).start()
+
     def _update_light(self, sensor_id):
         light_to_update = self.sensors_to_lights[sensor_id]
-        print('updating light: ' + hex(light_to_update.address) + ' and sensor: ' + sensor_id)
         # if light is off
-        if light_to_update.state != 1:
-            light_to_update.on()
-            light_to_update.set_level(100)
+        if light_to_update.state == 0 and not self.sensors[sensors_id].motion:
+            print("haven't seen motion, not updating light")
+            return
+            #light_to_update.on()
+            #light_to_update.set_level(100)
+
+        print('updating light: ' + hex(light_to_update.address) + ' and sensor: ' + sensor_id)
         pid = self.pid_controllers[hex(light_to_update.address).replace('0x', '')]
         pid.update(self.sensors[sensor_id].lux)
         brightness = light_to_update.level
@@ -213,7 +226,16 @@ class LightControl:
 
     def start_control_loop(self):
         self.state = self.state.CONTROL
+        # toggle the lights just to get initial measurements
+        for light_id in self.lights:
+            self.lights[light_id].off();
         time.sleep(2)
+        for light_id in self.lights:
+            self.lights[light_id].on();
+        time.sleep(2)
+        # start motion watchdog
+        for sensor_id in self.sensors:
+            _motion_watchdog(sensor_id)
 
     # mqtt source for sensor data
     def on_connect(self, client, userdata, flags, rc):
@@ -225,44 +247,45 @@ class LightControl:
         #print(msg.topic+" "+str(msg.payload) + '\n')
 
         data = json.loads(msg.payload.decode('utf-8'))
-        # only interested in light_lux messages
-        if 'light_lux' not in data:
-            return
         device_id = data['_meta']['device_id']
-        lux = float(data['light_lux'])
+        print(device_id)
 
         if device_id not in self.sensors and self.state != self.State.DISCOVER:
             return
 
-        print(device_id)
-        print(lux)
-        print()
-
-        # state machine for message handling
-        if self.state == self.State.IDLE:
-            return
-        elif self.state == self.State.DISCOVER:
-            if device_id not in self.sensors:
-                self.sensors[device_id] = LightSensor(device_id)
-            self.sensors[device_id].baseline = lux
-            self.sensors[device_id].update_seq_no(seq_no)
-
-        elif self.state == self.State.CHAR_LIGHT:
-            # only consider devices we've done baseline measurements for
-            #print('Saw ' + str(device_id))
-            if self.current_light is None:
-                # if the current light is not set yet, ignore this
-                print('characterize current light not set?')
+        # for light_lux messages
+        if 'light_lux' in data:
+            print(lux)
+            lux = float(data['light_lux'])
+            # state machine for message handling
+            if self.state == self.State.IDLE:
                 return
-            if device_id not in self.sensors:
-                print("Saw sensor not in discovered devices: " + str(device_id))
-                return
-            # if device_id not in self.seen_sensors:
-            # get measurement for current light
-            self.sensors[device_id].light_char_measurements[self.current_light] = lux
-        elif self.state == self.State.CONTROL:
-            self.sensors[device_id].lux = lux
-            self._update_light(device_id)
+            elif self.state == self.State.DISCOVER:
+                if device_id not in self.sensors:
+                    self.sensors[device_id] = LightSensor(device_id)
+                self.sensors[device_id].baseline = lux
+
+            elif self.state == self.State.CHAR_LIGHT:
+                # only consider devices we've done baseline measurements for
+                #print('Saw ' + str(device_id))
+                if self.current_light is None:
+                    # if the current light is not set yet, ignore this
+                    print('characterize current light not set?')
+                    return
+                if device_id not in self.sensors:
+                    print("Saw sensor not in discovered devices: " + str(device_id))
+                    return
+                # if device_id not in self.seen_sensors:
+                # get measurement for current light
+                self.sensors[device_id].light_char_measurements[self.current_light] = lux
+            elif self.state == self.State.CONTROL:
+                self.sensors[device_id].lux = lux
+                self._update_light(device_id)
+        elif 'motion' in data:
+            self.sensors[device_id].motion = 1
+            light = self.sensors_to_lights[device_id]
+            if light.state == 0:
+                light.on()
 
 CONFIG_FILE = '../config.yaml'
 with open(CONFIG_FILE, 'r') as fp:
