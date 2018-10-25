@@ -33,7 +33,7 @@ class LightControl:
         self.sensors = {}
         # dict mapping of light id to light object
         self.lights = {}
-        # dict mapping of sensor id (string) to light object
+        # dict mapping of sensor id (string) to light id (string)
         self.sensors_to_lights = {}
         # keep track of sensors seen during
         # characterization steps
@@ -42,7 +42,7 @@ class LightControl:
         #self.current_shade = None
         self.current_brightness = None
 
-        self.lower_bound_lux = 100
+        self.lower_bound_lux = 500
         self.pid_controllers = {}
 
         self.mqtt_client = mqtt.Client()
@@ -81,7 +81,7 @@ class LightControl:
             # if light is off
             if self.lights[light_id].state != 1:
                 self.lights[light_id].on()
-                self.lights[light_id].set_level(100)
+                self.lights[light_id].set_level(50)
 
         if sensor_list is not None:
             for sensor_id in sensor_list:
@@ -110,7 +110,7 @@ class LightControl:
                 if sensor_id not in self.sensors:
                     print('mapped sensor (%s) not one of sensors!' % sensor_id);
                     continue
-                self.sensors_to_lights[sensor_id] = self.lights[sensor_light_map[sensor_id]]
+                self.sensors_to_lights[sensor_id] = sensor_light_map[sensor_id]
         else:
             # TODO characterization!
             print("missing mappings!");
@@ -118,7 +118,7 @@ class LightControl:
 
         print('Discovered the following mappings:')
         for sensor_id in self.sensors_to_lights:
-            print('\t' + sensor_id + ' <--> ' + hex(self.sensors_to_lights[sensor_id].address))
+            print('\t' + sensor_id + ' <--> ' + self.sensors_to_lights[sensor_id])
 
     def _characterize_lights(self):
         # characterize lights
@@ -192,7 +192,7 @@ class LightControl:
         self._characterize_lights()
 
     def _update_light(self, sensor_id):
-        light_to_update = self.sensors_to_lights[sensor_id]
+        light_to_update = self.lights[self.sensors_to_lights[sensor_id]]
         print('updating light: ' + hex(light_to_update.address) + ' and sensor: ' + sensor_id)
         pid = self.pid_controllers[hex(light_to_update.address).replace('0x', '')]
         pid.update(self.sensors[sensor_id].lux)
@@ -207,6 +207,7 @@ class LightControl:
             brightness = 0
         try:
             light_to_update.set_level(brightness)
+            print('brightness setting: %f' % light_to_update.level)
             print(hex(light_to_update.address) + ' brightness set to ' + str(brightness) + ' percent at ' + str(datetime.datetime.now()))
         except Exception as e:
             print(e)
@@ -262,12 +263,13 @@ class LightControl:
         elif self.state == self.State.CONTROL:
             self.sensors[device_id].lux = lux
             try:
-                p = multiprocessing.Process(target=self._update_light, args=(device_id,))
-                p.start()
-                p.join(5)
-                if p.is_alive():
-                    p.terminate()
-                    p.join()
+                self._update_light(device_id)
+                #p = multiprocessing.Process(target=self._update_light, args=(device_id,))
+                #p.start()
+                #p.join(5)
+                #if p.is_alive():
+                #    p.terminate()
+                #    p.join()
             except Exception as e:
                 print(e)
                 traceback.print_exc()
