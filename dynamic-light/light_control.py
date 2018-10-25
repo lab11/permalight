@@ -47,7 +47,7 @@ class LightControl:
         self.lower_bound_lux = 500
         self.pid_controllers = {}
 
-        self.motion_timeout = 30*60
+        self.motion_timeout = 5*60
 
         self.mqtt_client = mqtt.Client()
         self.mqtt_client.on_connect = self.on_connect
