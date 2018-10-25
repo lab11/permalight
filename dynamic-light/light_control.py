@@ -2,7 +2,7 @@
 
 import sys
 import traceback
-import threading
+import multiprocessing
 import paho.mqtt.client as mqtt
 from PID import PID
 from enum import Enum
@@ -28,11 +28,13 @@ class LightControl:
 
     def __init__(self, mqtt_address):
         self.state = self.State.IDLE
+        self.manager = multiprocessing.Manager()
 
         # dict mapping of sensor id (string) to sensor object
         self.sensors = {}
         # dict mapping of light id to light object
         self.lights = {}
+        self.lights_to_brightness = self.manager.dict()
         # dict mapping of sensor id (string) to light id (string)
         self.sensors_to_lights = {}
         # keep track of sensors seen during
@@ -52,7 +54,6 @@ class LightControl:
         self.mqtt_client.on_message = self.on_message
 
         self.mqtt_client.connect(mqtt_address)
-        self.mqtt_client.loop_start()
 
     def discover(self, light_list, sensor_list, sensor_light_map):
         # discover lights, sensors, existing mapping
@@ -70,12 +71,11 @@ class LightControl:
             print("no lights supplied!")
             exit(1)
 
-        print('Discovered the following lights:')
-        for light_id in self.lights:
-            print('\t' + light_id)
 
+        print('Discovered the following lights:')
         # generate PID for each light
         for light_id in self.lights:
+            print('\t' + light_id)
             #TODO might need to alter these parameters
             pid = PID(0.1, 0, 0)
             pid.SetPoint = self.lower_bound_lux
@@ -84,6 +84,7 @@ class LightControl:
             if self.lights[light_id].state != 1:
                 self.lights[light_id].on()
                 self.lights[light_id].set_level(50)
+                self.lights_to_brightness[light_id] = 50
 
         if sensor_list is not None:
             for sensor_id in sensor_list:
@@ -194,15 +195,18 @@ class LightControl:
             pass
         self._characterize_lights()
 
-    def _motion_watchdog(self, sensor_id):
+    def _motion_watchdog(self):
         # TODO if haven't seen motion since last time, turn off associated light
-        if self.sensors[sensor_id].motion == 0:
-            self.lights[self.sensors_to_lights[sensor_id]].off()
-        self.sensors[sensor_id].motion = 0
-        threading.Timer(self.motion_timeout, self._motion_watchdog, [sensor_id]).start()
+        while(1):
+            time.delay(self.motion_timeout)
+            for sensor_id in self.sensors:
+                if self.sensors[sensor_id].motion == 0:
+                    self.lights[self.sensors_to_lights[sensor_id]].off()
+                self.sensors[sensor_id].motion = 0
 
     def _update_light(self, sensor_id):
-        light_to_update = self.lights[self.sensors_to_lights[sensor_id]]
+        light_id = self.sensors_to_lights[sensor_id]
+        light_to_update = self.lights[light_id]
         # if light is off
         if light_to_update.state == 0 and not self.sensors[sensor_id].motion:
             print("haven't seen motion, not updating light")
@@ -210,7 +214,7 @@ class LightControl:
         print('updating light: ' + hex(light_to_update.address) + ' and sensor: ' + sensor_id)
         pid = self.pid_controllers[hex(light_to_update.address).replace('0x', '')]
         pid.update(self.sensors[sensor_id].lux)
-        brightness = light_to_update.level
+        brightness = self.lights_to_brightness[light_id]
         print('brightness setting: %f' % brightness)
         print('lux sensed: %f' % self.sensors[sensor_id].lux)
         print('pid output: %f' % pid.output)
@@ -221,8 +225,9 @@ class LightControl:
             brightness = 0
         try:
             light_to_update.set_level(brightness)
-            print('brightness setting: %f' % light_to_update.level)
+            print('brightness setting: %f' % brightness)
             print(hex(light_to_update.address) + ' brightness set to ' + str(brightness) + ' percent at ' + str(datetime.datetime.now()))
+            self.lights_to_brightness[light_id] = brightness
         except Exception as e:
             print(e)
             traceback.print_exc()
@@ -237,8 +242,9 @@ class LightControl:
             self.lights[light_id].on();
         time.sleep(2)
         # start motion watchdog
-        for sensor_id in self.sensors:
-            threading.Timer(self.motion_timeout, self._motion_watchdog, [sensor_id]).start()
+        multiprocessing.Process(target=self._motion_watchdog)
+
+        self.mqtt_client.loop_forever()
 
     # mqtt source for sensor data
     def on_connect(self, client, userdata, flags, rc):
@@ -283,13 +289,13 @@ class LightControl:
             elif self.state == self.State.CONTROL:
                 self.sensors[device_id].lux = lux
                 try:
-                    self._update_light(device_id)
-                    #p = multiprocessing.Process(target=self._update_light, args=(device_id,))
-                    #p.start()
-                    #p.join(5)
-                    #if p.is_alive():
-                    #    p.terminate()
-                    #    p.join()
+                    #self._update_light(device_id)
+                    p = multiprocessing.Process(target=self._update_light, args=(device_id,))
+                    p.start()
+                    p.join(5)
+                    if p.is_alive():
+                        p.terminate()
+                        p.join()
                 except Exception as e:
                     print(e)
                     traceback.print_exc()
@@ -323,5 +329,3 @@ lightcontrol.discover(light_list, sensor_list, sensor_light_map)
 #print(sorted(lightcontrol.sensors.keys()))
 lightcontrol.start_control_loop()
 
-while(1):
-    time.sleep(2)
