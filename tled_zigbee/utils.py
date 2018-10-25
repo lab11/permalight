@@ -29,11 +29,11 @@ def create_byte_stream_to_send(data_bytes):
 	bytes_to_send.append(0x01)
 
 	for i in range(len(data_bytes)):
-	    if data_bytes[i] < 0x10:
-	        bytes_to_send.append(0x02)
-	        bytes_to_send.append(data_bytes[i]^0x10)
-	    else:
-	        bytes_to_send.append(data_bytes[i])
+		if data_bytes[i] < 0x10:
+			bytes_to_send.append(0x02)
+			bytes_to_send.append(data_bytes[i]^0x10)
+		else:
+			bytes_to_send.append(data_bytes[i])
 	bytes_to_send.append(0x03)
 	return bytearray(bytes_to_send)
 
@@ -47,3 +47,10 @@ def get_checksum(msg_type_msb, msg_type_lsb, length_msb, length_lsb, data):
 	for b in data:
 		checksum = checksum ^ b
 	return checksum
+
+def wait_for_prev(start_time, wait_timeout):
+	if start_time == None or wait_timeout == None:
+		return
+
+	while(time.time() - start_time < wait_timeout):
+		continue
