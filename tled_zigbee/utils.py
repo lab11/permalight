@@ -1,4 +1,5 @@
 import serial
+import time
 
 AND_WITH_FF = lambda x: x & 0xFF
 SHIFT_RIGHT_8 = lambda x: x >> 8
@@ -18,7 +19,7 @@ BYTE_SIZE_CONSTANTS = {
 	8: serial.EIGHTBITS
 }
 
-STOP_BITS_CONSTANTS = {	
+STOP_BITS_CONSTANTS = {
 	1: serial.STOPBITS_ONE,
 	1.5: serial.STOPBITS_ONE_POINT_FIVE,
 	2: serial.STOPBITS_TWO
