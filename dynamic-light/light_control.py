@@ -32,6 +32,7 @@ class LightControl:
 
         # dict mapping of sensor id (string) to sensor object
         self.sensors = {}
+        self.sensors_to_motion = self.manager.dict()
         # dict mapping of light id to light object
         self.lights = {}
         self.lights_to_brightness = self.manager.dict()
@@ -89,6 +90,7 @@ class LightControl:
         if sensor_list is not None:
             for sensor_id in sensor_list:
                 self.sensors[sensor_id] = LightSensor(sensor_id)
+                self.sensors_to_motion[sensor_id] = 0
         else:
             # start sensor discovery
             self.state = self.State.DISCOVER
@@ -198,17 +200,18 @@ class LightControl:
     def _motion_watchdog(self):
         # TODO if haven't seen motion since last time, turn off associated light
         while(1):
-            time.delay(self.motion_timeout)
+            time.sleep(self.motion_timeout)
             for sensor_id in self.sensors:
-                if self.sensors[sensor_id].motion == 0:
+                if self.sensors_to_motion[sensor_id] == 0:
+                    print("have not seen motion, turning off light %s" % self.sensors_to_lights[sensor_id])
                     self.lights[self.sensors_to_lights[sensor_id]].off()
-                self.sensors[sensor_id].motion = 0
+                self.sensors_to_motion[sensor_id] = 0
 
     def _update_light(self, sensor_id):
         light_id = self.sensors_to_lights[sensor_id]
         light_to_update = self.lights[light_id]
         # if light is off
-        if light_to_update.state == 0 and not self.sensors[sensor_id].motion:
+        if light_to_update.state == 0 and not self.sensors_to_motion[sensor_id]:
             print("haven't seen motion, not updating light")
             return
         print('updating light: ' + hex(light_to_update.address) + ' and sensor: ' + sensor_id)
@@ -242,7 +245,8 @@ class LightControl:
             self.lights[light_id].on();
         time.sleep(2)
         # start motion watchdog
-        multiprocessing.Process(target=self._motion_watchdog)
+        p = multiprocessing.Process(target=self._motion_watchdog)
+        p.start()
 
         self.mqtt_client.loop_forever()
 
@@ -303,11 +307,11 @@ class LightControl:
         elif 'motion' in data:
             print(device_id)
             print('Saw motion!')
-            self.sensors[device_id].motion = 1
+            self.sensors_to_motion[device_id] = 1
             try:
                 light = self.lights[self.sensors_to_lights[device_id]]
-                light.on()
-                light.set_level(light.level)
+                #light.on()
+                light.set_level(self.lights_to_brightness[self.sensors_to_lights[device_id]])
             except Exception as e:
                 print(e)
                 traceback.print_exc()
