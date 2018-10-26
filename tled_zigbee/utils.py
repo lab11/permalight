@@ -92,7 +92,7 @@ def parse_output(a):
 			result['status'] = 'busy right now'
 		else:
 			result['status'] = 'failed'
-	result['packet_type'] = '%s,%s'%(a[8],a[9]) 
+		result['packet_type'] = '%s,%s'%(a[8],a[9]) 
 	return result
 
 
