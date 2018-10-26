@@ -52,9 +52,11 @@ class Light():
     bytes_to_send = utils.create_byte_stream_to_send(data_bytes=data)
     self.device.write(bytes_to_send)
     self.last_controlled_time = time.time()
+    rsp = [self.synchronous_read()]
     if print_return:
-      rsp = [self.synchronous_read()]
       print (rsp)
+    self.device.close()
+    self.device.open()
     self.device.reset_input_buffer()
     self.device.reset_output_buffer()
 
@@ -65,9 +67,11 @@ class Light():
     bytes_to_send = utils.create_byte_stream_to_send(data_bytes=data)
     self.device.write(bytes_to_send)
     self.last_controlled_time = time.time()
+    rsp = [self.synchronous_read()]
     if print_return:
-        rsp = [self.synchronous_read()]
-        print (rsp)
+      print (rsp)
+    self.device.close()
+    self.device.open()
     self.device.reset_input_buffer()
     self.device.reset_output_buffer()
 
@@ -78,9 +82,11 @@ class Light():
     bytes_to_send = utils.create_byte_stream_to_send(data_bytes=data)
     self.device.write(bytes_to_send)
     self.last_controlled_time = time.time()
+    rsp = [self.synchronous_read()]
     if print_return:
-      rsp = [self.synchronous_read()]
       print (rsp)
+    self.device.close()
+    self.device.open()
     self.device.reset_input_buffer()
     self.device.reset_output_buffer()
 
@@ -101,8 +107,8 @@ class Light():
     source_ep = 0x01
 
     on_off = int(with_on_off)
-    if int(level/100*0xFF) > 0xFF or level < 0x0:
-      print ("out of bounds level : %d. 0x0<=level<=0xff", level)
+    if int(level/100)*0xFF > 0xFF or level < 0x0:
+      print ("out of bounds level : %d. 0x0<=level<=0xff"%level)
       return -1
 
     transition_time_list = utils.convert_int16_msb_lsb_list(transition_time)
@@ -122,9 +128,13 @@ class Light():
     self.device.write(bytes_to_send)
     self.last_controlled_time = time.time()
 
+    
+    rsp = [self.synchronous_read()]
     if print_return:
-      rsp = [self.synchronous_read(), self.synchronous_read()]
       print (rsp)
+
+    self.device.close()
+    self.device.open()
     self.device.reset_input_buffer()
     self.device.reset_output_buffer()
 
@@ -138,4 +148,8 @@ class Light():
       line = self.device.read()
 
     read_bytes.append(line)
-    return read_bytes
+    cleaned_op = utils.clean_output(read_bytes)
+    res = utils.parse_output(cleaned_op)
+    if res['msg_type'] == '0x80,0x0': 
+      print (res['status'])
+    return res

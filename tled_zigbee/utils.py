@@ -55,3 +55,45 @@ def wait_for_prev(start_time, wait_timeout):
 
 	while(time.time() - start_time < wait_timeout):
 		continue
+
+def clean_output(bytes_output):
+	i = 0
+	new_bytes = []
+	special_num = False
+	while i < len(bytes_output):
+		num = int.from_bytes(bytes_output[i], byteorder='little')
+		if num == 2:
+			special_num = True
+			i+=1
+			continue
+		else:
+			if special_num:
+				num = num - 16
+				special_num=False
+		new_bytes.append(hex(num))
+		i+=1
+	return new_bytes
+
+def parse_output(a):
+	result = {}
+	result['cleaned_ouptut'] = a
+	result['msg_type'] = '%s,%s'%(a[1], a[2])
+	if result['msg_type'] == '0x80,0x0': 
+		status = a[6]
+		if status == '0x0':
+			result['status'] = 'success'
+		elif status == '0x1':
+			result['status'] = 'incorrect params'
+		elif status == '0x2':
+			result['status'] = 'unhandled command'
+		elif status == '0x3':
+			result['status'] = 'command failed'
+		elif status == '0x4':
+			result['status'] = 'busy right now'
+		else:
+			result['status'] = 'failed'
+	result['packet_type'] = '%s,%s'%(a[8],a[9]) 
+	return result
+
+
+

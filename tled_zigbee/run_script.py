@@ -8,12 +8,12 @@ with open('settings.yaml', 'r') as fp:
 controller = Controller(config_file='settings.yaml')
 
 objects = {}
+'''
 for light in config['lights']:
 	for name in light:
 		obj = Light(address=light[name]['address'], endpoint=light[name]['endpoint'], controller=controller, is_group=False)
 		objects[name] = obj
-
-
+'''
 for light in config['groups']:
 	for name in light:
 		obj = Light(address=light[name]['address'], endpoint=light[name]['endpoint'], controller=controller, is_group=True)
@@ -31,8 +31,11 @@ group2 = objects['group2']
 # light1.set_level(0x0)
 # light2.set_level(0xf0)
 # light1.on()
-group1.toggle()
-group2.toggle()
+#group1.toggle()
+group2.set_level(20, print_return=True)
+print("done")
+group1.set_level(100, print_return=True)
+#group2.toggle(print_return=False)
 
 # controller.synchronous_read()
 # controller.synchronous_read()
