@@ -55,6 +55,8 @@ class Light():
     if print_return:
       rsp = [self.synchronous_read()]
       print (rsp)
+    self.device.reset_input_buffer()
+    self.device.reset_output_buffer()
 
   def on(self, print_return=False, seconds_before_next_command=2):
     utils.wait_for_prev(self.last_controlled_time, self.delay_between_commands)
@@ -66,6 +68,8 @@ class Light():
     if print_return:
         rsp = [self.synchronous_read()]
         print (rsp)
+    self.device.reset_input_buffer()
+    self.device.reset_output_buffer()
 
   def toggle(self, print_return=False, seconds_before_next_command=2):
     utils.wait_for_prev(self.last_controlled_time, self.delay_between_commands)
@@ -77,6 +81,8 @@ class Light():
     if print_return:
       rsp = [self.synchronous_read()]
       print (rsp)
+    self.device.reset_input_buffer()
+    self.device.reset_output_buffer()
 
   def set_level(self, level, transition_time=1, with_on_off=True, print_return=False, seconds_before_next_command=2):
 
@@ -119,6 +125,8 @@ class Light():
     if print_return:
       rsp = [self.synchronous_read(), self.synchronous_read()]
       print (rsp)
+    self.device.reset_input_buffer()
+    self.device.reset_output_buffer()
 
   def synchronous_read(self):
     line = self.device.read()

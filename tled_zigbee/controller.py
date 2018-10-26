@@ -28,6 +28,9 @@ class Controller(Thread):
 			bytesize=self.byte_size,
 			xonxoff=self.xonxoff 
 		)
+		self.device.reset_input_buffer()
+		self.device.reset_output_buffer()
+
 	def get_device(self):
 		return self.device
 
