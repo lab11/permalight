@@ -72,11 +72,12 @@ class LightControl:
             print("no lights supplied!")
             exit(1)
 
-
         print('Discovered the following lights:')
-        # generate PID for each light
         for light_id in self.lights:
             print('\t' + light_id)
+
+        # generate PID for each light
+        for light_id in self.lights:
             #TODO might need to alter these parameters
             pid = PID(0.1, 0, 0)
             pid.SetPoint = self.lower_bound_lux
@@ -199,19 +200,26 @@ class LightControl:
 
     def _motion_watchdog(self):
         # TODO if haven't seen motion since last time, turn off associated light
+        time_start = datetime.datetime.now()
         while(1):
-            time.sleep(self.motion_timeout)
-            for sensor_id in self.sensors:
-                if self.sensors_to_motion[sensor_id] == 0:
-                    print("have not seen motion, turning off light %s" % self.sensors_to_lights[sensor_id])
-                    self.lights[self.sensors_to_lights[sensor_id]].off()
-                self.sensors_to_motion[sensor_id] = 0
+            time.sleep(5)
+            time_check = datetime.datetime.now()
+            if (time_check - time_start).total_seconds() >= self.motion_timeout:
+                time_start = datetime.datetime.now()
+                for sensor_id in self.sensors:
+                    if self.sensors_to_motion[sensor_id] == 0:
+                        print("have not seen motion, turning off light %s" % self.sensors_to_lights[sensor_id])
+                        self.lights[self.sensors_to_lights[sensor_id]].off()
+                        self.lights_to_brightness[self.sensors_to_lights[sensor_id]] = 0
+                        self.no_motion = 1
+                    self.sensors_to_motion[sensor_id] = 0
 
     def _update_light(self, sensor_id):
         light_id = self.sensors_to_lights[sensor_id]
         light_to_update = self.lights[light_id]
         # if light is off
-        if light_to_update.state == 0 and not self.sensors_to_motion[sensor_id]:
+        print(self.lights_to_brightness[light_id])
+        if self.lights_to_brightness[light_id] == 0 and not self.sensors_to_motion[sensor_id]:
             print("haven't seen motion, not updating light")
             return
         print('updating light: ' + hex(light_to_update.address) + ' and sensor: ' + sensor_id)
