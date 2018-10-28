@@ -1,0 +1,12 @@
+[Unit]
+Description=Openthread Border Router Watchdog
+After=wpantund.service
+
+[Service]
+ExecStart=/home/pi/permalight/dynamic-light/light_control.py
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=permalight
+
+[Install]
+WantedBy=multi-user.target
