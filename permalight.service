@@ -1,5 +1,5 @@
 [Unit]
-Description=Openthread Border Router Watchdog
+Description=Permalight dynamic light control
 After=wpantund.service
 
 [Service]

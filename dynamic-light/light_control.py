@@ -14,7 +14,7 @@ import os.path
 import datetime
 import yaml
 from light_sensor import LightSensor
-sys.path.append('../tled_zigbee/')
+sys.path.append(os.path.abspath('/home/pi/permalight/tled_zigbee/'))
 from controller import Controller
 from light import Light
 
@@ -45,7 +45,7 @@ class LightControl:
         #self.current_shade = None
         self.current_brightness = None
 
-        self.lower_bound_lux = 500
+        self.lower_bound_lux = 750 
         self.pid_controllers = {}
 
         self.motion_timeout = 5*60
@@ -325,14 +325,14 @@ class LightControl:
                 traceback.print_exc()
             print()
 
-CONFIG_FILE = '../config.yaml'
+CONFIG_FILE = '/home/pi/permalight/config.yaml'
 with open(CONFIG_FILE, 'r') as fp:
   config = yaml.safe_load(fp)
 sensor_list = config['sensors']
 light_list = config['groups']
 sensor_light_map = config['map']
 
-controller = Controller(config_file='../config.yaml')
+controller = Controller(config_file=CONFIG_FILE)
 
 lightcontrol = LightControl("34.218.46.181")
 #TODO add inputs for lights, mapping of sensors to lights
