@@ -31,13 +31,13 @@ class LightControl:
         self.manager = multiprocessing.Manager()
 
         # dict mapping of sensor id (string) to sensor object
-        self.sensors = {}
-        self.sensors_to_motion = self.manager.dict()
+        self.light_sensors = {}
+        self.lights_to_motion = self.manager.dict()
         # dict mapping of light id to light object
         self.lights = {}
         self.lights_to_brightness = self.manager.dict()
         # dict mapping of sensor id (string) to light id (string)
-        self.sensors_to_lights = {}
+        self.light_sensors_to_lights = {}
         # keep track of sensors seen during
         # characterization steps
         self.seen_sensors = set()
@@ -45,7 +45,7 @@ class LightControl:
         #self.current_shade = None
         self.current_brightness = None
 
-        self.lower_bound_lux = 750 
+        self.lower_bound_lux = 750
         self.pid_controllers = {}
 
         self.motion_timeout = 5*60
@@ -56,7 +56,7 @@ class LightControl:
 
         self.mqtt_client.connect(mqtt_address)
 
-    def discover(self, light_list, sensor_list, sensor_light_map):
+    def discover(self, light_list, sensor_light_map, occ_light_map):
         # discover lights, sensors, existing mapping
         # do we have a saved python dict from characterization?
         #have_char_light_file = os.path.isfile('sensor_light_mappings.pkl') and \
@@ -87,116 +87,127 @@ class LightControl:
                 self.lights[light_id].on()
                 self.lights[light_id].set_level(50)
                 self.lights_to_brightness[light_id] = 50
-
-        if sensor_list is not None:
-            for sensor_id in sensor_list:
-                self.sensors[sensor_id] = LightSensor(sensor_id)
-                self.sensors_to_motion[sensor_id] = 0
-        else:
-            # start sensor discovery
-            self.state = self.State.DISCOVER
-            # toggle all lights on/off to generate output from sensor
-            # the change in light will cause mqtt messages, and we can generate
-            # list of relavent sensors
-            #TODO turn all lights high
-            time.sleep(5)
-            #TODO turn all lights low
-            time.sleep(5)
-            self.state = self.State.IDLE
-
-        # TODO pick lights/sensors/mapping out of saved data
-        print('Discovered the following sensors:')
-        for sensor_id in self.sensors:
-            print('\t' + sensor_id)
+            self.lights_to_motion[light_id] = 0
 
         # set up sensor-light mapping
         if sensor_light_map is not None:
             #TODO read in mapping
             for sensor_id in sensor_light_map:
-                if sensor_id not in self.sensors:
-                    print('mapped sensor (%s) not one of sensors!' % sensor_id);
-                    continue
-                self.sensors_to_lights[sensor_id] = sensor_light_map[sensor_id]
+                self.light_sensors_to_lights[sensor_id] = sensor_light_map[sensor_id]
         else:
             # TODO characterization!
             print("missing mappings!");
             exit(1)
 
-        print('Discovered the following mappings:')
-        for sensor_id in self.sensors_to_lights:
-            print('\t' + sensor_id + ' <--> ' + self.sensors_to_lights[sensor_id])
+        if occ_light_map is not None:
+            #TODO read in mapping
+            for sensor_id in occ_light_map:
+                self.occ_sensors_to_lights[sensor_id] = occ_light_map[sensor_id]
+
+        #if sensor_light_map is not None:
+        #    for sensor_id in sensor_light_map:
+        #        self.light_sensors[sensor_id] = LightSensor(sensor_id)
+        #        self.light_sensors_to_motion[sensor_id] = 0
+        #else:
+        #    # start sensor discovery
+        #    self.state = self.State.DISCOVER
+        #    # toggle all lights on/off to generate output from sensor
+        #    # the change in light will cause mqtt messages, and we can generate
+        #    # list of relavent sensors
+        #    #TODO turn all lights high
+        #    time.sleep(5)
+        #    #TODO turn all lights low
+        #    time.sleep(5)
+        #    self.state = self.State.IDLE
+
+        # TODO pick lights/sensors/mapping out of saved data
+        print('Discovered the following light sensors:')
+        for sensor_id in self.light_sensors_to_lights:
+            print('\t' + sensor_id)
+
+        print('Discovered the following occ sensors:')
+        for sensor_id in self.occ_sensors_to_lights:
+            print('\t' + sensor_id)
+
+        print('Discovered the following light mappings:')
+        for sensor_id in self.light_sensors_to_lights:
+            print('\t' + sensor_id + ' <--> ' + self.light_sensors_to_lights[sensor_id])
+
+        print('Discovered the following occ mappings:')
+        for sensor_id in self.occ_sensors_to_lights:
+            print('\t' + sensor_id + ' <--> ' + self.occ_sensors_to_lights[sensor_id])
 
 
-    def _characterize_lights(self):
-        # characterize lights
-        # reuse old characterization if it exists
-        if len(self.sensors_to_lights) != 0:
-            return
+    #def _characterize_lights(self):
+    #    # characterize lights
+    #    # reuse old characterization if it exists
+    #    if len(self.light_sensors_to_lights) != 0:
+    #        return
 
-        print("starting light characterizing measurements!")
-        for light in self.lights:
-            label = light.address
-            if label is None:
-                print('this light is wack!')
-                print(light)
-                continue
-            self.current_light = label
-            print(label)
-            self.state = self.State.CHAR_LIGHT
-            # TODO turn on the light
-            time.sleep(5)
-            # TODO turn off the light
-            time.sleep(5)
-            self.state = self.State.CHAR_IDLE
+    #    print("starting light characterizing measurements!")
+    #    for light in self.lights:
+    #        label = light.address
+    #        if label is None:
+    #            print('this light is wack!')
+    #            print(light)
+    #            continue
+    #        self.current_light = label
+    #        print(label)
+    #        self.state = self.State.CHAR_LIGHT
+    #        # TODO turn on the light
+    #        time.sleep(5)
+    #        # TODO turn off the light
+    #        time.sleep(5)
+    #        self.state = self.State.CHAR_IDLE
 
-            # sweep through brightness
-            #for brightness in range(0, 101, 10):
-            #    print(brightness)
-            #    # clear seen devices
-            #    self.seen_sensors.clear()
-            #    #print(brightness)
-            #    self.current_brightness = brightness
-            #    while(1):
-            #        try:
-            #            light.set_brightness(brightness/100*65535)
-            #            break
-            #        except lifxlan.errors.WorkflowException:
-            #            print('Failed to set brightness ' + label)
-            #    while(1):
-            #        if self.seen_sensors == set([x for x in self.sensors.keys()]):
-            #            break
-            #        time.sleep(5)
-            for sensor_id in self.sensors:
-                baseline_lux = self.sensors[sensor_id].baseline
-                measurement = self.sensors[sensor_id].light_char_measurements[light]
+    #        # sweep through brightness
+    #        #for brightness in range(0, 101, 10):
+    #        #    print(brightness)
+    #        #    # clear seen devices
+    #        #    self.seen_sensors.clear()
+    #        #    #print(brightness)
+    #        #    self.current_brightness = brightness
+    #        #    while(1):
+    #        #        try:
+    #        #            light.set_brightness(brightness/100*65535)
+    #        #            break
+    #        #        except lifxlan.errors.WorkflowException:
+    #        #            print('Failed to set brightness ' + label)
+    #        #    while(1):
+    #        #        if self.seen_sensors == set([x for x in self.light_sensors.keys()]):
+    #        #            break
+    #        #        time.sleep(5)
+    #        for sensor_id in self.light_sensors:
+    #            baseline_lux = self.light_sensors[sensor_id].baseline
+    #            measurement = self.light_sensors[sensor_id].light_char_measurements[light]
 
-                # save because why not?
-                with open(sensor_id + '_characterization.pkl', 'wb') as output:
-                    pickle.dump(self.sensors[sensor_id].light_char_measurements, output, pickle.HIGHEST_PROTOCOL)
+    #            # save because why not?
+    #            with open(sensor_id + '_characterization.pkl', 'wb') as output:
+    #                pickle.dump(self.light_sensors[sensor_id].light_char_measurements, output, pickle.HIGHEST_PROTOCOL)
 
-        # generate primary light associations
-        # eventually we can do smarter things than 1-to-1 mappings
-        # for each sensor, see which light affected it the most
-        for sensor_id in self.sensors:
-            max_affect_light = (None, 50)
-            for light in self.sensors[sensor_id].light_char_measurements:
-                max_effect = self.sensors[sensor_id].light_char_measurements[light]
-                if max_effect > max_affect_light[1]:
-                    max_affect_light = (light, max_effect)
-            self.sensors_to_lights[sensor_id] = max_affect_light[0]
-        print(self.sensors_to_lights)
-        with open('sensor_light_mappings.pkl', 'wb') as output:
-            pickle.dump(self.sensors_to_lights, output, pickle.HIGHEST_PROTOCOL)
+    #    # generate primary light associations
+    #    # eventually we can do smarter things than 1-to-1 mappings
+    #    # for each sensor, see which light affected it the most
+    #    for sensor_id in self.light_sensors:
+    #        max_affect_light = (None, 50)
+    #        for light in self.light_sensors[sensor_id].light_char_measurements:
+    #            max_effect = self.light_sensors[sensor_id].light_char_measurements[light]
+    #            if max_effect > max_affect_light[1]:
+    #                max_affect_light = (light, max_effect)
+    #        self.light_sensors_to_lights[sensor_id] = max_affect_light[0]
+    #    print(self.light_sensors_to_lights)
+    #    with open('sensor_light_mappings.pkl', 'wb') as output:
+    #        pickle.dump(self.light_sensors_to_lights, output, pickle.HIGHEST_PROTOCOL)
 
-        self.current_light = None
-        self.current_brightness = None
+    #    self.current_light = None
+    #    self.current_brightness = None
 
-    def characterize(self):
-        # turn all lights off
-        for light in self.lights:
-            #TODO turn light off
-            pass
-        self._characterize_lights()
+    #def characterize(self):
+    #    # turn all lights off
+    #    for light in self.lights:
+    #        #TODO turn light off
+    #        pass
+    #    self._characterize_lights()
 
     def _motion_watchdog(self):
         # TODO if haven't seen motion since last time, turn off associated light
@@ -206,28 +217,29 @@ class LightControl:
             time_check = datetime.datetime.now()
             if (time_check - time_start).total_seconds() >= self.motion_timeout:
                 time_start = datetime.datetime.now()
-                for sensor_id in self.sensors:
-                    if self.sensors_to_motion[sensor_id] == 0:
-                        print("have not seen motion, turning off light %s" % self.sensors_to_lights[sensor_id])
-                        self.lights[self.sensors_to_lights[sensor_id]].off()
-                        self.lights_to_brightness[self.sensors_to_lights[sensor_id]] = 0
+                for sensor_id in self.occ_sensors_to_lights:
+                    light_id = self.occ_sensors_to_lights[sensor_id]
+                    if self.lights_to_motion[light_id] == 0:
+                        print("have not seen motion, turning off light %s" % self.lights[light_id])
+                        self.lights[light_id].off()
+                        self.lights_to_brightness[light_id] = 0
                         self.no_motion = 1
-                    self.sensors_to_motion[sensor_id] = 0
+                    self.light_sensors_to_motion[sensor_id] = 0
 
     def _update_light(self, sensor_id):
-        light_id = self.sensors_to_lights[sensor_id]
+        light_id = self.light_sensors_to_lights[sensor_id]
         light_to_update = self.lights[light_id]
         # if light is off
         print(self.lights_to_brightness[light_id])
-        if self.lights_to_brightness[light_id] == 0 and not self.sensors_to_motion[sensor_id]:
+        if self.lights_to_brightness[light_id] == 0 and not self.light_sensors_to_motion[sensor_id]:
             print("haven't seen motion, not updating light")
             return
         print('updating light: ' + hex(light_to_update.address) + ' and sensor: ' + sensor_id)
         pid = self.pid_controllers[hex(light_to_update.address).replace('0x', '')]
-        pid.update(self.sensors[sensor_id].lux)
+        pid.update(self.light_sensors[sensor_id].lux)
         brightness = self.lights_to_brightness[light_id]
         print('brightness setting: %f' % brightness)
-        print('lux sensed: %f' % self.sensors[sensor_id].lux)
+        print('lux sensed: %f' % self.light_sensors[sensor_id].lux)
         print('pid output: %f' % pid.output)
         brightness += pid.output
         if brightness > 100:
@@ -270,7 +282,7 @@ class LightControl:
         data = json.loads(msg.payload.decode('utf-8'))
         device_id = data['_meta']['device_id']
 
-        if device_id not in self.sensors and self.state != self.State.DISCOVER:
+        if device_id not in self.light_sensors and self.state != self.State.DISCOVER:
             return
 
         if 'light_lux' in data:
@@ -281,9 +293,9 @@ class LightControl:
             if self.state == self.State.IDLE:
                 return
             elif self.state == self.State.DISCOVER:
-                if device_id not in self.sensors:
-                    self.sensors[device_id] = LightSensor(device_id)
-                self.sensors[device_id].baseline = lux
+                if device_id not in self.light_sensors:
+                    self.light_sensors[device_id] = LightSensor(device_id)
+                self.light_sensors[device_id].baseline = lux
 
             elif self.state == self.State.CHAR_LIGHT:
                 # only consider devices we've done baseline measurements for
@@ -292,14 +304,14 @@ class LightControl:
                     # if the current light is not set yet, ignore this
                     print('characterize current light not set?')
                     return
-                if device_id not in self.sensors:
+                if device_id not in self.light_sensors:
                     print("Saw sensor not in discovered devices: " + str(device_id))
                     return
                 # if device_id not in self.seen_sensors:
                 # get measurement for current light
-                self.sensors[device_id].light_char_measurements[self.current_light] = lux
+                self.light_sensors[device_id].light_char_measurements[self.current_light] = lux
             elif self.state == self.State.CONTROL:
-                self.sensors[device_id].lux = lux
+                self.light_sensors[device_id].lux = lux
                 try:
                     #self._update_light(device_id)
                     p = multiprocessing.Process(target=self._update_light, args=(device_id,))
@@ -315,11 +327,11 @@ class LightControl:
         elif 'motion' in data:
             print(device_id)
             print('Saw motion!')
-            self.sensors_to_motion[device_id] = 1
+            self.light_sensors_to_motion[device_id] = 1
             try:
-                light = self.lights[self.sensors_to_lights[device_id]]
+                light = self.lights[self.light_sensors_to_lights[device_id]]
                 #light.on()
-                light.set_level(self.lights_to_brightness[self.sensors_to_lights[device_id]])
+                light.set_level(self.lights_to_brightness[self.light_sensors_to_lights[device_id]])
             except Exception as e:
                 print(e)
                 traceback.print_exc()
