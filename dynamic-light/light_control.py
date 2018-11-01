@@ -36,6 +36,7 @@ class LightControl:
         # dict mapping of light id to light object
         self.lights = {}
         self.lights_to_brightness = self.manager.dict()
+        self.lights_to_off = self.manager.dict()
         # dict mapping of sensor id (string) to light id (string)
         self.sensors_to_lights = {}
         # keep track of sensors seen during
@@ -45,10 +46,10 @@ class LightControl:
         #self.current_shade = None
         self.current_brightness = None
 
-        self.lower_bound_lux = 750 
+        self.lower_bound_lux = 500 
         self.pid_controllers = {}
 
-        self.motion_timeout = 5*60
+        self.motion_timeout = 10*60 
 
         self.mqtt_client = mqtt.Client()
         self.mqtt_client.on_connect = self.on_connect
@@ -87,11 +88,12 @@ class LightControl:
                 self.lights[light_id].on()
                 self.lights[light_id].set_level(50)
                 self.lights_to_brightness[light_id] = 50
+                self.lights_to_off[light_id] = 0;
 
         if sensor_list is not None:
             for sensor_id in sensor_list:
                 self.sensors[sensor_id] = LightSensor(sensor_id)
-                self.sensors_to_motion[sensor_id] = 0
+                self.sensors_to_motion[sensor_id] = 1
         else:
             # start sensor discovery
             self.state = self.State.DISCOVER
@@ -210,8 +212,8 @@ class LightControl:
                     if self.sensors_to_motion[sensor_id] == 0:
                         print("have not seen motion, turning off light %s" % self.sensors_to_lights[sensor_id])
                         self.lights[self.sensors_to_lights[sensor_id]].off()
-                        self.lights_to_brightness[self.sensors_to_lights[sensor_id]] = 0
-                        self.no_motion = 1
+                        self.lights_to_off[self.sensors_to_lights[sensor_id]] = 1;
+                        #self.lights_to_brightness[self.sensors_to_lights[sensor_id]] = 0
                     self.sensors_to_motion[sensor_id] = 0
 
     def _update_light(self, sensor_id):
@@ -219,7 +221,7 @@ class LightControl:
         light_to_update = self.lights[light_id]
         # if light is off
         print(self.lights_to_brightness[light_id])
-        if self.lights_to_brightness[light_id] == 0 and not self.sensors_to_motion[sensor_id]:
+        if not self.sensors_to_motion[sensor_id]:
             print("haven't seen motion, not updating light")
             return
         print('updating light: ' + hex(light_to_update.address) + ' and sensor: ' + sensor_id)
@@ -315,14 +317,16 @@ class LightControl:
         elif 'motion' in data:
             print(device_id)
             print('Saw motion!')
+            if self.lights_to_off[self.sensors_to_lights[device_id]]:
+                try:
+                    light = self.lights[self.sensors_to_lights[device_id]]
+                    #light.on()
+                    light.set_level(self.lights_to_brightness[self.sensors_to_lights[device_id]])
+                    self.lights_to_off[self.sensors_to_lights[device_id]] = 0;
+                except Exception as e:
+                    print(e)
+                    traceback.print_exc()
             self.sensors_to_motion[device_id] = 1
-            try:
-                light = self.lights[self.sensors_to_lights[device_id]]
-                #light.on()
-                light.set_level(self.lights_to_brightness[self.sensors_to_lights[device_id]])
-            except Exception as e:
-                print(e)
-                traceback.print_exc()
             print()
 
 CONFIG_FILE = '/home/pi/permalight/config.yaml'
