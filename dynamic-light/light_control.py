@@ -36,8 +36,10 @@ class LightControl:
         # dict mapping of light id to light object
         self.lights = {}
         self.lights_to_brightness = self.manager.dict()
+        self.lights_to_off = self.manager.dict()
         # dict mapping of sensor id (string) to light id (string)
         self.light_sensors_to_lights = {}
+        self.occ_sensors_to_lights = {}
         # keep track of sensors seen during
         # characterization steps
         self.seen_sensors = set()
@@ -45,10 +47,10 @@ class LightControl:
         #self.current_shade = None
         self.current_brightness = None
 
-        self.lower_bound_lux = 750
+        self.lower_bound_lux = 500
         self.pid_controllers = {}
 
-        self.motion_timeout = 5*60
+        self.motion_timeout = 10*60
 
         self.mqtt_client = mqtt.Client()
         self.mqtt_client.on_connect = self.on_connect
@@ -82,12 +84,31 @@ class LightControl:
             pid = PID(0.1, 0, 0)
             pid.SetPoint = self.lower_bound_lux
             self.pid_controllers[light_id] = pid
-            # if light is off
-            if self.lights[light_id].state != 1:
-                self.lights[light_id].on()
-                self.lights[light_id].set_level(50)
-                self.lights_to_brightness[light_id] = 50
-            self.lights_to_motion[light_id] = 0
+            self.lights[light_id].on()
+            self.lights[light_id].set_level(50)
+            self.lights_to_brightness[light_id] = 50
+            self.lights_to_motion[light_id] = 1
+            self.lights_to_off[light_id] = 0;
+
+        if sensor_list is not None:
+            for sensor_id in sensor_list:
+                self.sensors[sensor_id] = LightSensor(sensor_id)
+        else:
+            # start sensor discovery
+            self.state = self.State.DISCOVER
+            # toggle all lights on/off to generate output from sensor
+            # the change in light will cause mqtt messages, and we can generate
+            # list of relavent sensors
+            #TODO turn all lights high
+            time.sleep(5)
+            #TODO turn all lights low
+            time.sleep(5)
+            self.state = self.State.IDLE
+
+        # TODO pick lights/sensors/mapping out of saved data
+        print('Discovered the following sensors:')
+        for sensor_id in self.sensors:
+            print('\t' + sensor_id)
 
         # set up sensor-light mapping
         if sensor_light_map is not None:
@@ -222,8 +243,7 @@ class LightControl:
                     if self.lights_to_motion[light_id] == 0:
                         print("have not seen motion, turning off light %s" % self.lights[light_id])
                         self.lights[light_id].off()
-                        self.lights_to_brightness[light_id] = 0
-                        self.no_motion = 1
+                        self.lights_to_off[light_id] = 1;
                     self.light_sensors_to_motion[sensor_id] = 0
 
     def _update_light(self, sensor_id):
@@ -231,7 +251,7 @@ class LightControl:
         light_to_update = self.lights[light_id]
         # if light is off
         print(self.lights_to_brightness[light_id])
-        if self.lights_to_brightness[light_id] == 0 and not self.light_sensors_to_motion[sensor_id]:
+        if self.lights_to_off[light_id] and not self.lights_to_motion[light_id]:
             print("haven't seen motion, not updating light")
             return
         print('updating light: ' + hex(light_to_update.address) + ' and sensor: ' + sensor_id)
@@ -327,28 +347,30 @@ class LightControl:
         elif 'motion' in data:
             print(device_id)
             print('Saw motion!')
-            self.light_sensors_to_motion[device_id] = 1
+            light_id = occ_sensors_to_lights[device_id]
             try:
-                light = self.lights[self.light_sensors_to_lights[device_id]]
+                light = self.lights[light_id]
                 #light.on()
-                light.set_level(self.lights_to_brightness[self.light_sensors_to_lights[device_id]])
+                light.set_level(self.lights_to_brightness[light_id])
+                self.lights_to_off[light_id] = 0
             except Exception as e:
                 print(e)
                 traceback.print_exc()
+            self.lights_to_motion[light_id] = 1
             print()
 
 CONFIG_FILE = '/home/pi/permalight/config.yaml'
 with open(CONFIG_FILE, 'r') as fp:
   config = yaml.safe_load(fp)
-sensor_list = config['sensors']
 light_list = config['groups']
-sensor_light_map = config['map']
+sensor_light_map = config['sensor_map']
+occ_light_map = config['occ_map']
 
 controller = Controller(config_file=CONFIG_FILE)
 
 lightcontrol = LightControl("34.218.46.181")
 #TODO add inputs for lights, mapping of sensors to lights
-lightcontrol.discover(light_list, sensor_list, sensor_light_map)
+lightcontrol.discover(light_list, sensor_light_map, occ_light_map)
 #print(lightcontrol.lights)
 #print(sorted(lightcontrol.sensors.keys()))
 lightcontrol.start_control_loop()
