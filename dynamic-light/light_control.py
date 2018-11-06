@@ -90,9 +90,9 @@ class LightControl:
             self.lights_to_motion[light_id] = 1
             self.lights_to_off[light_id] = 0;
 
-        if sensor_list is not None:
-            for sensor_id in sensor_list:
-                self.sensors[sensor_id] = LightSensor(sensor_id)
+        if sensor_light_map is not None:
+            for sensor_id in sensor_light_map:
+                self.light_sensors[sensor_id] = LightSensor(sensor_id)
         else:
             # start sensor discovery
             self.state = self.State.DISCOVER
@@ -107,7 +107,7 @@ class LightControl:
 
         # TODO pick lights/sensors/mapping out of saved data
         print('Discovered the following sensors:')
-        for sensor_id in self.sensors:
+        for sensor_id in self.light_sensors:
             print('\t' + sensor_id)
 
         # set up sensor-light mapping
