@@ -87,8 +87,8 @@ class LightControl:
             self.lights[light_id].on()
             self.lights[light_id].set_level(50)
             self.lights_to_brightness[light_id] = 50
-            self.lights_to_motion[light_id] = 1
-            self.lights_to_off[light_id] = 0;
+            self.lights_to_motion[light_id] = 0
+            self.lights_to_off[light_id] = 0
 
         if sensor_light_map is not None:
             for sensor_id in sensor_light_map:
@@ -241,10 +241,10 @@ class LightControl:
                 for sensor_id in self.occ_sensors_to_lights:
                     light_id = self.occ_sensors_to_lights[sensor_id]
                     if self.lights_to_motion[light_id] == 0:
-                        print("have not seen motion, turning off light %s" % self.lights[light_id])
+                        print("have not seen motion, turning off light %s" % light_id)
                         self.lights[light_id].off()
                         self.lights_to_off[light_id] = 1;
-                    self.light_sensors_to_motion[sensor_id] = 0
+                    self.lights_to_motion[light_id] = 0
 
     def _update_light(self, sensor_id):
         light_id = self.light_sensors_to_lights[sensor_id]
