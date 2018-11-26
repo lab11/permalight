@@ -32,6 +32,7 @@ class LightControl:
 
         # dict mapping of sensor id (string) to sensor object
         self.sensors = {}
+        self.provided_sensors = False
         self.sensors_to_motion = self.manager.dict()
         # dict mapping of light id to light object
         self.lights = {}
@@ -46,10 +47,10 @@ class LightControl:
         #self.current_shade = None
         self.current_brightness = None
 
-        self.lower_bound_lux = 500 
+        self.lower_bound_lux = 500
         self.pid_controllers = {}
 
-        self.motion_timeout = 10*60 
+        self.motion_timeout = 10*60
 
         self.mqtt_client = mqtt.Client()
         self.mqtt_client.on_connect = self.on_connect
@@ -91,20 +92,25 @@ class LightControl:
                 self.lights_to_off[light_id] = 0;
 
         if sensor_list is not None:
+            self.provided_sensors = True
             for sensor_id in sensor_list:
                 self.sensors[sensor_id] = LightSensor(sensor_id)
                 self.sensors_to_motion[sensor_id] = 1
-        else:
-            # start sensor discovery
-            self.state = self.State.DISCOVER
-            # toggle all lights on/off to generate output from sensor
-            # the change in light will cause mqtt messages, and we can generate
-            # list of relavent sensors
-            #TODO turn all lights high
-            time.sleep(5)
-            #TODO turn all lights low
-            time.sleep(5)
-            self.state = self.State.IDLE
+
+        # start sensor discovery
+        self.state = self.State.DISCOVER
+        # toggle all lights on/off to generate output from sensor
+        # the change in light will cause mqtt messages, and we can generate
+        # list of relavent sensors
+        # turn all lights high
+        for label in self.lights:
+            self.lights[label].off()
+        time.sleep(5)
+        # turn all lights low
+        for label in self.lights:
+            self.lights[label].on()
+        time.sleep(5)
+        self.state = self.State.IDLE
 
         # TODO pick lights/sensors/mapping out of saved data
         print('Discovered the following sensors:')
@@ -120,9 +126,7 @@ class LightControl:
                     continue
                 self.sensors_to_lights[sensor_id] = sensor_light_map[sensor_id]
         else:
-            # TODO characterization!
-            print("missing mappings!");
-            exit(1)
+            self.characterize()
 
         print('Discovered the following mappings:')
         for sensor_id in self.sensors_to_lights:
@@ -136,20 +140,16 @@ class LightControl:
             return
 
         print("starting light characterizing measurements!")
-        for light in self.lights:
-            label = light.address
-            if label is None:
-                print('this light is wack!')
-                print(light)
-                continue
-            self.current_light = label
-            print(label)
+        for label in self.lights:
+            self.current_light = self.lights[label]
+            print("Light: " + str(label))
+            self.current_light.off()
+            time.sleep(5)
             self.state = self.State.CHAR_LIGHT
-            # TODO turn on the light
+            self.current_light.on()
             time.sleep(5)
-            # TODO turn off the light
-            time.sleep(5)
-            self.state = self.State.CHAR_IDLE
+            self.state = self.State.IDLE
+            self.current_light.off()
 
             # sweep through brightness
             #for brightness in range(0, 101, 10):
@@ -169,35 +169,38 @@ class LightControl:
             #            break
             #        time.sleep(5)
             for sensor_id in self.sensors:
+                print("Sensor: " + str(label))
                 baseline_lux = self.sensors[sensor_id].baseline
                 measurement = self.sensors[sensor_id].light_char_measurements[light]
-
+                self.self.sensors[sensor_id].light_char_measurements[light] = measurement - lux
+                print("\tMeasurement: " + str(measurement))
                 # save because why not?
-                with open(sensor_id + '_characterization.pkl', 'wb') as output:
-                    pickle.dump(self.sensors[sensor_id].light_char_measurements, output, pickle.HIGHEST_PROTOCOL)
+                #with open(sensor_id + '_characterization.pkl', 'wb') as output:
+                #    pickle.dump(self.sensors[sensor_id].light_char_measurements, output, pickle.HIGHEST_PROTOCOL)
 
         # generate primary light associations
         # eventually we can do smarter things than 1-to-1 mappings
         # for each sensor, see which light affected it the most
         for sensor_id in self.sensors:
-            max_affect_light = (None, 50)
-            for light in self.sensors[sensor_id].light_char_measurements:
-                max_effect = self.sensors[sensor_id].light_char_measurements[light]
-                if max_effect > max_affect_light[1]:
-                    max_affect_light = (light, max_effect)
-            self.sensors_to_lights[sensor_id] = max_affect_light[0]
+            max_effect_light = None
+            max_effect = 0
+            for light_id in self.sensors[sensor_id].light_char_measurements:
+                effect = self.sensors[sensor_id].light_char_measurements[light]
+                if effect > max_effect:
+                    max_affect_light = light_id
+                    max_effect = effect
+            self.sensors_to_lights[sensor_id] = max_affect_light
         print(self.sensors_to_lights)
-        with open('sensor_light_mappings.pkl', 'wb') as output:
-            pickle.dump(self.sensors_to_lights, output, pickle.HIGHEST_PROTOCOL)
+        #with open('sensor_light_mappings.pkl', 'wb') as output:
+        #    pickle.dump(self.sensors_to_lights, output, pickle.HIGHEST_PROTOCOL)
 
         self.current_light = None
-        self.current_brightness = None
+        #self.current_brightness = None
 
     def characterize(self):
         # turn all lights off
         for light in self.lights:
-            #TODO turn light off
-            pass
+            light.off()
         self._characterize_lights()
 
     def _motion_watchdog(self):
@@ -283,8 +286,9 @@ class LightControl:
             if self.state == self.State.IDLE:
                 return
             elif self.state == self.State.DISCOVER:
-                if device_id not in self.sensors:
-                    self.sensors[device_id] = LightSensor(device_id)
+                if self.provided_sensors:
+                    if device_id not in self.sensors:
+                        self.sensors[device_id] = LightSensor(device_id)
                 self.sensors[device_id].baseline = lux
 
             elif self.state == self.State.CHAR_LIGHT:
