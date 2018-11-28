@@ -1,0 +1,14 @@
+lights: {
+  light0: {channel: ''},
+  light1: {channel: ''},
+  light2: {channel: ''},
+  light3: {channel: ''},
+  light4: {channel: ''},
+  light5: {channel: ''},
+  light6: {channel: ''},
+  light7: {channel: ''},
+  light8: {channel: ''},
+}
+
+webapp_host: http://<hostname>
+webapp_port: 5000

@@ -2,3 +2,4 @@
 *.pyc
 settings.yaml
 .DS_Store
+config.yaml
