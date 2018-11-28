@@ -14,8 +14,7 @@ import os.path
 import datetime
 import yaml
 from light_sensor import LightSensor
-sys.path.append(os.path.abspath('/home/pi/permalight/tled_zigbee/'))
-from controller import Controller
+sys.path.append(os.path.abspath('/home/pi/permalight/tled_ws/'))
 from light import Light
 
 class LightControl:
@@ -57,6 +56,7 @@ class LightControl:
         self.mqtt_client.on_message = self.on_message
 
         self.mqtt_client.connect(mqtt_address)
+        self.mqtt_client.loop_start()
 
     def discover(self, light_list, sensor_list, sensor_light_map):
         # discover lights, sensors, existing mapping
@@ -66,9 +66,10 @@ class LightControl:
 
         # if we already have a light list
         if light_list is not None:
-            for light in light_list:
-              for name in light:
-                self.lights[hex(light[name]['address']).replace('0x','')] = Light(address=light[name]['address'], endpoint=light[name]['endpoint'], controller=controller, is_group=True)
+            self.lights = light_list
+            #for light in light_list:
+            #  for name in light:
+            #    self.lights[hex(light[name]['address']).replace('0x','')] = Light(address=light[name]['address'], endpoint=light[name]['endpoint'], controller=controller, is_group=True)
         else:
             #TODO some way to discover lights?
             print("no lights supplied!")
@@ -79,17 +80,17 @@ class LightControl:
             print('\t' + light_id)
 
         # generate PID for each light
-        for light_id in self.lights:
-            #TODO might need to alter these parameters
-            pid = PID(0.1, 0, 0)
-            pid.SetPoint = self.lower_bound_lux
-            self.pid_controllers[light_id] = pid
-            # if light is off
-            if self.lights[light_id].state != 1:
-                self.lights[light_id].on()
-                self.lights[light_id].set_level(50)
-                self.lights_to_brightness[light_id] = 50
-                self.lights_to_off[light_id] = 0;
+        #for light_id in self.lights:
+        #    #TODO might need to alter these parameters
+        #    pid = PID(0.1, 0, 0)
+        #    pid.SetPoint = self.lower_bound_lux
+        #    self.pid_controllers[light_id] = pid
+        #    # if light is off
+        #    if self.lights[light_id].state != 1:
+        #        self.lights[light_id].on()
+        #        self.lights[light_id].set_level(50)
+        #        self.lights_to_brightness[light_id] = 50
+        #        self.lights_to_off[light_id] = 0;
 
         if sensor_list is not None:
             self.provided_sensors = True
@@ -102,15 +103,16 @@ class LightControl:
         # toggle all lights on/off to generate output from sensor
         # the change in light will cause mqtt messages, and we can generate
         # list of relavent sensors
-        # turn all lights high
-        for label in self.lights:
-            self.lights[label].off()
-        time.sleep(5)
-        # turn all lights low
+        time.sleep(1)
         for label in self.lights:
             self.lights[label].on()
-        time.sleep(5)
+        time.sleep(3)
+        for label in self.lights:
+            self.lights[label].off()
+        time.sleep(3)
         self.state = self.State.IDLE
+        for label in self.lights:
+            self.lights[label].on()
 
         # TODO pick lights/sensors/mapping out of saved data
         print('Discovered the following sensors:')
@@ -141,15 +143,15 @@ class LightControl:
 
         print("starting light characterizing measurements!")
         for label in self.lights:
-            self.current_light = self.lights[label]
+            self.current_light = label
             print("Light: " + str(label))
-            self.current_light.off()
-            time.sleep(5)
+            self.lights[self.current_light].off()
+            time.sleep(3)
             self.state = self.State.CHAR_LIGHT
-            self.current_light.on()
-            time.sleep(5)
+            self.lights[self.current_light].on()
+            time.sleep(3)
             self.state = self.State.IDLE
-            self.current_light.off()
+            self.lights[self.current_light].off()
 
             # sweep through brightness
             #for brightness in range(0, 101, 10):
@@ -169,11 +171,13 @@ class LightControl:
             #            break
             #        time.sleep(5)
             for sensor_id in self.sensors:
-                print("Sensor: " + str(label))
-                baseline_lux = self.sensors[sensor_id].baseline
-                measurement = self.sensors[sensor_id].light_char_measurements[light]
-                self.self.sensors[sensor_id].light_char_measurements[light] = measurement - lux
-                print("\tMeasurement: " + str(measurement))
+                if label in self.sensors[sensor_id].light_char_measurements:
+                    baseline_lux = self.sensors[sensor_id].baseline
+                    measurement = self.sensors[sensor_id].light_char_measurements[label]
+                    self.sensors[sensor_id].light_char_measurements[label] = measurement - baseline_lux
+                    print("Light: " + str(label))
+                    print("sensor: " + str(sensor_id))
+                    print("\tMeasurement: " + str(measurement))
                 # save because why not?
                 #with open(sensor_id + '_characterization.pkl', 'wb') as output:
                 #    pickle.dump(self.sensors[sensor_id].light_char_measurements, output, pickle.HIGHEST_PROTOCOL)
@@ -185,11 +189,11 @@ class LightControl:
             max_effect_light = None
             max_effect = 0
             for light_id in self.sensors[sensor_id].light_char_measurements:
-                effect = self.sensors[sensor_id].light_char_measurements[light]
+                effect = self.sensors[sensor_id].light_char_measurements[light_id]
                 if effect > max_effect:
-                    max_affect_light = light_id
+                    max_effect_light = light_id
                     max_effect = effect
-            self.sensors_to_lights[sensor_id] = max_affect_light
+            self.sensors_to_lights[sensor_id] = max_effect_light
         print(self.sensors_to_lights)
         #with open('sensor_light_mappings.pkl', 'wb') as output:
         #    pickle.dump(self.sensors_to_lights, output, pickle.HIGHEST_PROTOCOL)
@@ -199,8 +203,8 @@ class LightControl:
 
     def characterize(self):
         # turn all lights off
-        for light in self.lights:
-            light.off()
+        for light_id in self.lights:
+            self.lights[light_id].off()
         self._characterize_lights()
 
     def _motion_watchdog(self):
@@ -261,7 +265,7 @@ class LightControl:
         p = multiprocessing.Process(target=self._motion_watchdog)
         p.start()
 
-        self.mqtt_client.loop_forever()
+        #self.mqtt_client.loop_forever()
 
     # mqtt source for sensor data
     def on_connect(self, client, userdata, flags, rc):
@@ -279,13 +283,14 @@ class LightControl:
             return
 
         if 'light_lux' in data:
-            print(device_id)
+            #print(device_id)
             lux = data['light_lux']
-            print(lux)
+            #print(lux)
             # state machine for message handling
             if self.state == self.State.IDLE:
                 return
             elif self.state == self.State.DISCOVER:
+                print("Baseline lux for sensor " + device_id + ": " + str(lux))
                 if self.provided_sensors:
                     if device_id not in self.sensors:
                         self.sensors[device_id] = LightSensor(device_id)
@@ -317,7 +322,6 @@ class LightControl:
                 except Exception as e:
                     print(e)
                     traceback.print_exc()
-            print()
         elif 'motion' in data:
             print(device_id)
             print('Saw motion!')
@@ -337,15 +341,20 @@ CONFIG_FILE = '/home/pi/permalight/config.yaml'
 with open(CONFIG_FILE, 'r') as fp:
   config = yaml.safe_load(fp)
 sensor_list = config['sensors']
-light_list = config['groups']
-sensor_light_map = config['map']
+light_list = {}
+light_config = config['lights']
+hostname = config['webapp_host']
+port = config['webapp_port']
+for light_idx in light_config:
+	light = Light(channel = light_config[light_idx]['channel'], webapp_host=hostname, webapp_port=port)
+	light_list[light_config[light_idx]['channel']] = light
 
-controller = Controller(config_file=CONFIG_FILE)
+#controller = Controller(config_file=CONFIG_FILE)
 
 lightcontrol = LightControl("34.218.46.181")
 #TODO add inputs for lights, mapping of sensors to lights
-lightcontrol.discover(light_list, sensor_list, sensor_light_map)
+lightcontrol.discover(light_list, sensor_list, None)
 #print(lightcontrol.lights)
 #print(sorted(lightcontrol.sensors.keys()))
-lightcontrol.start_control_loop()
+#lightcontrol.start_control_loop()
 
