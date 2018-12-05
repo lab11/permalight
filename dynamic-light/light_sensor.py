@@ -4,6 +4,7 @@ class LightSensor:
     def __init__(self, device_id):
         self.device_id = device_id
         self.light_char_measurements = {}
+        self.light_char_effect = {}
         self.baseline = 0
         self.lux = 0
         self.motion = 0

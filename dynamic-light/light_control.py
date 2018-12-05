@@ -99,20 +99,16 @@ class LightControl:
                 self.sensors_to_motion[sensor_id] = 1
 
         # start sensor discovery
-        self.state = self.State.DISCOVER
         # toggle all lights on/off to generate output from sensor
         # the change in light will cause mqtt messages, and we can generate
         # list of relavent sensors
-        time.sleep(1)
+        self.state = self.State.DISCOVER
         for label in self.lights:
             self.lights[label].on()
-        time.sleep(3)
         for label in self.lights:
             self.lights[label].off()
-        time.sleep(3)
+        time.sleep(4)
         self.state = self.State.IDLE
-        for label in self.lights:
-            self.lights[label].on()
 
         # TODO pick lights/sensors/mapping out of saved data
         print('Discovered the following sensors:')
@@ -144,12 +140,11 @@ class LightControl:
         print("starting light characterizing measurements!")
         for label in self.lights:
             self.current_light = label
-            print("Light: " + str(label))
-            self.lights[self.current_light].off()
-            time.sleep(3)
+            print("\nLight: " + str(label))
+            time.sleep(1)
             self.state = self.State.CHAR_LIGHT
             self.lights[self.current_light].on()
-            time.sleep(3)
+            time.sleep(4)
             self.state = self.State.IDLE
             self.lights[self.current_light].off()
 
@@ -174,10 +169,10 @@ class LightControl:
                 if label in self.sensors[sensor_id].light_char_measurements:
                     baseline_lux = self.sensors[sensor_id].baseline
                     measurement = self.sensors[sensor_id].light_char_measurements[label]
-                    self.sensors[sensor_id].light_char_measurements[label] = measurement - baseline_lux
-                    print("Light: " + str(label))
-                    print("sensor: " + str(sensor_id))
-                    print("\tMeasurement: " + str(measurement))
+                    self.sensors[sensor_id].light_char_measurements[label] = 0
+                    self.sensors[sensor_id].light_char_effect[label] = measurement - baseline_lux
+                    print("  sensor: " + str(sensor_id))
+                    print("    Measurement: " + str(measurement))
                 # save because why not?
                 #with open(sensor_id + '_characterization.pkl', 'wb') as output:
                 #    pickle.dump(self.sensors[sensor_id].light_char_measurements, output, pickle.HIGHEST_PROTOCOL)
@@ -188,12 +183,13 @@ class LightControl:
         for sensor_id in self.sensors:
             max_effect_light = None
             max_effect = 0
-            for light_id in self.sensors[sensor_id].light_char_measurements:
-                effect = self.sensors[sensor_id].light_char_measurements[light_id]
+            for light_id in self.sensors[sensor_id].light_char_effect:
+                effect = self.sensors[sensor_id].light_char_effect[light_id]
                 if effect > max_effect:
                     max_effect_light = light_id
                     max_effect = effect
             self.sensors_to_lights[sensor_id] = max_effect_light
+            print(sensor_id + " : " + str(self.sensors_to_lights[sensor_id]) + " " + str(self.sensors[sensor_id].light_char_effect[self.sensors_to_lights[sensor_id]]))
         print(self.sensors_to_lights)
         #with open('sensor_light_mappings.pkl', 'wb') as output:
         #    pickle.dump(self.sensors_to_lights, output, pickle.HIGHEST_PROTOCOL)
@@ -206,6 +202,8 @@ class LightControl:
         for light_id in self.lights:
             self.lights[light_id].off()
         self._characterize_lights()
+        for light_id in self.lights:
+            self.lights[light_id].on()
 
     def _motion_watchdog(self):
         # TODO if haven't seen motion since last time, turn off associated light
@@ -290,11 +288,12 @@ class LightControl:
             if self.state == self.State.IDLE:
                 return
             elif self.state == self.State.DISCOVER:
-                print("Baseline lux for sensor " + device_id + ": " + str(lux))
-                if self.provided_sensors:
+                if not self.provided_sensors:
                     if device_id not in self.sensors:
                         self.sensors[device_id] = LightSensor(device_id)
-                self.sensors[device_id].baseline = lux
+                if self.sensors[device_id].baseline == 0 or self.sensors[device_id].baseline > lux:
+                    print("Baseline lux for sensor " + device_id + ": " + str(lux))
+                    self.sensors[device_id].baseline = lux
 
             elif self.state == self.State.CHAR_LIGHT:
                 # only consider devices we've done baseline measurements for
@@ -307,8 +306,13 @@ class LightControl:
                     print("Saw sensor not in discovered devices: " + str(device_id))
                     return
                 # if device_id not in self.seen_sensors:
-                # get measurement for current light
-                self.sensors[device_id].light_char_measurements[self.current_light] = lux
+                # get max measurement for current light
+                try:
+                    measurements = self.sensors[device_id].light_char_measurements
+                    if self.current_light not in measurements or lux > measurements[self.current_light]:
+                        self.sensors[device_id].light_char_measurements[self.current_light] = lux
+                except Exception as e:
+                    print(e)
             elif self.state == self.State.CONTROL:
                 self.sensors[device_id].lux = lux
                 try:
