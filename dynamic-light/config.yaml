@@ -2,10 +2,21 @@ mqtt_addr: 'coap.permamote.com'
 
 light_list:
   - "Neal's light"
-    #- "Romil's light"
+  - "Will's light"
+  - "Josh's light"
+  - "Branden's light"
+  - "Pat's light"
 
 sensor_map:
   'c098e5110031': "Neal's light"
+  'c098e5110033': "Will's light"
+  'c098e5110032': "Branden's light"
+  'c098e5110046': "Josh's light"
+  'c098e5110042': "Pat's light"
 
 occ_map:
-  'c098e5110031': "Neal's light"
+  #  'c098e5110031': "Neal's light"
+  #  'c098e5110033': "Will's light"
+  #  'c098e5110032': "Branden's light"
+  #  'c098e5110046': "Josh's light"
+  #  'c098e5110042': "Pat's light"

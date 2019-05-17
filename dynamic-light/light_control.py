@@ -142,6 +142,7 @@ class LightControl:
         # TODO if haven't seen motion since last time, turn off associated light
         time_start = datetime.datetime.now()
         while(1):
+            if len(self.occSensorIdToLightName) == 0: continue
             time.sleep(5)
             time_check = datetime.datetime.now()
             if (time_check - time_start).total_seconds() >= self.motionTimeout:
@@ -228,8 +229,8 @@ class LightControl:
                 except Exception as e:
                     print(e)
                     traceback.print_exc()
-            print()
         elif 'motion' in data:
+            if len(self.occSensorIdToLightName) == 0: return
             print(device_id)
             print('Saw motion!')
             light_id = self.occSensorIdToLightName[device_id]
@@ -240,7 +241,8 @@ class LightControl:
                 print(e)
                 traceback.print_exc()
             self.sensorIdToSensor[device_id].motion = 1
-            print()
+        else: return
+        print()
 
 sys.path.append(os.path.abspath('../lifx'))
 from lifx import Controller
