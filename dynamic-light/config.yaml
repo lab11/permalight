@@ -1,0 +1,11 @@
+mqtt_addr: 'coap.permamote.com'
+
+light_list:
+  - "Neal's light"
+    #- "Romil's light"
+
+sensor_map:
+  'c098e5110031': "Neal's light"
+
+occ_map:
+  'c098e5110031': "Neal's light"
