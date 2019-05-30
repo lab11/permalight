@@ -1,24 +1,21 @@
 {
-  "name": "SOMA-Shade-Control",
+  "name": "permalight",
   "version": "0.0.1",
-  "description": "Control SOMA Smart shades with BLE",
-  "main": "soma.js",
+  "description": "Permamote lighting control",
+  "main": "server.js",
   "repository": {
     "type": "git",
-    "url": "git://github.com/lab11/SOMA-Shade-Control"
+    "url": "git://github.com/lab11/SOMA-Shade-Control.git"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
   },
   "keywords": [
     "SOMA",
-    "Shade",
-    "BLE"
+    "Shade"
   ],
-  "author": {
-    "name": "Joshua Adkins",
-    "email": "adkins@berkeley.edu"
-  },
+  "author": "Neal Jackson <neal.jackson@berkeley.edu>",
   "license": "MIT",
   "dependencies": {
     "async": "^2.6.0",
@@ -28,12 +25,13 @@
     "express": "^4.16.3",
     "express-basic-auth": "^1.1.5",
     "helmet": "^3.12.1",
+    "https": "^1.0.0",
     "mqtt": "^3.0.0",
-    "noble": "",
     "yargs": ""
   },
   "bugs": {
-    "url": "https://github.com/lab11/SOMA-Shade-Control/issues"
+    "url": "https://github.com/lab11/permalight/issues"
   },
-  "homepage": "https://github.com/lab11/SOMA-Shade-Control#readme"
+  "homepage": "https://github.com/lab11/permalight",
+  "devDependencies": {}
 }
