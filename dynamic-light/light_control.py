@@ -28,22 +28,28 @@ class LightControl:
         self.lightNameToLights = {}
         # dict mapping of sensor id (string) to light id (string)
         self.lightSensorIdToLightName = {}
+        self.lightNameToSensorId = {}
         self.occSensorIdToLightName = {}
 
         # keep track of discovered sensors
         self.sensorIdToSensor = {}
 
-        self.lowerBoundLux = 300
-        self.lightToPidControllers = {}
+        self.lowerBoundLux = 250
+        self.lightNameToPidController = {}
 
         self.motionTimeout = 10*60
 
-        self.mqttClient = mqtt.Client()
-        self.mqttClient.on_connect = self.on_connect
-        self.mqttClient.on_message = self.on_message
+        self.mqttControlClient = mqtt.Client()
+        self.mqttControlClient.on_connect = self.control_on_connect
+        self.mqttControlClient.on_message = self.control_on_message
+        self.mqttControlClient.connect("localhost")
+        self.mqttControlClient.loop_start()
 
-        self.mqttClient.connect(mqtt_address)
-        self.mqttClient.loop_start()
+        self.mqttSensorClient = mqtt.Client()
+        self.mqttSensorClient.on_connect = self.sensor_on_connect
+        self.mqttSensorClient.on_message = self.sensor_on_message
+        self.mqttSensorClient.connect(mqtt_address)
+        self.mqttSensorClient.loop_start()
 
     def all_on(self):
         for name in self.lightNameToLights:
@@ -82,7 +88,7 @@ class LightControl:
             #TODO might need to alter these parameters
             pid = PID(0.1, 0, 0)
             pid.SetPoint = self.lowerBoundLux
-            self.lightToPidControllers[name] = pid
+            self.lightNameToPidController[name] = pid
             self.lightNameToLights[name].on()
             self.lightNameToLights[name].set_level(1)
 
@@ -109,6 +115,7 @@ class LightControl:
             #TODO read in mapping
             for sensor_id in sensor_light_map:
                 self.lightSensorIdToLightName[sensor_id] = sensor_light_map[sensor_id]
+                self.lightNameToSensorId[sensor_light_map[sensor_id]] = sensor_id
         else:
             # TODO characterization!
             print("missing mappings!");
@@ -149,6 +156,8 @@ class LightControl:
                 time_start = datetime.datetime.now()
                 for sensor_id in self.occSensorIdToLightName:
                     light_id = self.occSensorIdToLightName[sensor_id]
+                    # if control for this light/sensor pair is disabled, don't turn off light
+                    if self.sensorIdToSensor[sensor_id].enable == 0: continue
                     if self.sensorIdToSensor[sensor_id].motion == 0:
                         print("have not seen motion, turning off light %s" % light_id)
                         self.lightNameToLights[light_id].off()
@@ -159,13 +168,15 @@ class LightControl:
         light_to_update = self.lightNameToLights[light_id]
 
         # if the light is on and haven't seen motion recently
+        # if control for this light/sensor pair is disabled, don't turn off light
         print(self.lightNameToLights[light_id].get_state())
         print(self.sensorIdToSensor[sensor_id].motion)
-        if not self.lightNameToLights[light_id].get_state() and not self.sensorIdToSensor[sensor_id].motion:
-            print("haven't seen motion, not updating light")
+        if not self.lightNameToLights[light_id].get_state() and not self.sensorIdToSensor[sensor_id].motion \
+                or self.sensorIdToSensor[sensor_id].enable == 0:
+            print("control disabled, not updating light")
             return
         print('updating light: ' + light_id + ' and sensor: ' + sensor_id)
-        pid = self.lightToPidControllers[light_id]
+        pid = self.lightNameToPidController[light_id]
         pid.update(self.sensorIdToSensor[sensor_id].lux)
         brightness = self.lightNameToLights[light_id].get_level()
         print('brightness setting: %f' % brightness)
@@ -191,12 +202,38 @@ class LightControl:
         self._motion_watchdog()
 
     # mqtt source for sensor data
-    def on_connect(self, client, userdata, flags, rc):
-        print("Connected to mqtt stream with result code "+str(rc))
+    def control_on_connect(self, client, userdata, flags, rc):
+        print("Connected to control mqtt stream with result code "+str(rc))
+        client.subscribe("permalight/#")
+
+    def control_on_message(self, client, userdata, msg):
+        data = json.loads(msg.payload.decode('utf-8'))
+        light_name = data['light_name']
+        if light_name not in self.lightNameToLights:
+            print("light does not exist")
+            return
+        if 'enable' in data:
+            self.sensorIdToSensor[self.lightNameToSensorId[light_name]].enable = bool(data['enable'])
+        if 'set_point' in data:
+            self.lightNameToPidController[light_name].SetPoint = float(data['set_point'])
+            print(light_name + " set point is now " + str(data['set_point']));
+        if 'bright' in data:
+            self.lightNameToPidController[light_name].SetPoint += 25
+            print(light_name + " set point is now " + str(self.lightNameToPidController[light_name].SetPoint))
+        if 'dim' in data:
+            self.lightNameToPidController[light_name].SetPoint -= 25
+            if self.lightNameToPidController[light_name].SetPoint < 0:
+                self.lightNameToPidController[light_name].SetPoint = 0
+            print(light_name + " set point is now " + str(self.lightNameToPidController[light_name].SetPoint))
+
+
+    # mqtt source for sensor data
+    def sensor_on_connect(self, client, userdata, flags, rc):
+        print("Connected to sensor mqtt stream with result code "+str(rc))
         client.subscribe("device/Permamote/#")
         #client.subscribe("device/BLEES/#")
 
-    def on_message(self, client, userdata, msg):
+    def sensor_on_message(self, client, userdata, msg):
         #print(msg.topic+" "+str(msg.payload) + '\n')
 
         data = json.loads(msg.payload.decode('utf-8'))
@@ -219,13 +256,13 @@ class LightControl:
             elif self.state == self.State.CONTROL:
                 self.sensorIdToSensor[device_id].lux = lux
                 try:
-                    #self._update_light(device_id)
-                    p = multiprocessing.Process(target=self._update_light, args=(device_id,))
-                    p.start()
-                    p.join(5)
-                    if p.is_alive():
-                        p.terminate()
-                        p.join()
+                    self._update_light(device_id)
+                    #p = multiprocessing.Process(target=self._update_light, args=(device_id,))
+                    #p.start()
+                    #p.join(5)
+                    #if p.is_alive():
+                    #    p.terminate()
+                    #    p.join()
                 except Exception as e:
                     print(e)
                     traceback.print_exc()

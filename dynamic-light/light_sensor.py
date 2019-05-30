@@ -6,6 +6,7 @@ class LightSensor:
         self.lux = 0
         self.motion = 0
         self.last_seq_no = 0
+        self.enable = 1
     def __str__(self):
         print_str = self.device_id + '\r\n'
         print_str += 'baseline = ' + str(self.baseline) + '\r\n'
