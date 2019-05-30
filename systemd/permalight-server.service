@@ -1,0 +1,13 @@
+[Unit]
+Description=Permalight control server
+Wants=networking.service permalight.service
+After=networking.service permalight.service
+
+[Service]
+ExecStart=/home/pi/permalight/server/server.js
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=permalight-server
+
+[Install]
+WantedBy=multi-user.target

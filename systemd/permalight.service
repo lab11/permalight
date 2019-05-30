@@ -1,9 +1,10 @@
 [Unit]
 Description=Permalight dynamic light control
-After=wpantund.service
+Wants=networking.service
+After=networking.service
 
 [Service]
-ExecStart=/home/pi/permalight/dynamic-light/light_control.py
+ExecStart=/home/pi/permalight/permalight/light_control.py
 StandardOutput=syslog
 StandardError=syslog
 SyslogIdentifier=permalight
