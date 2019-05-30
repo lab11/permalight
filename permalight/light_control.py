@@ -281,7 +281,7 @@ class LightControl:
         else: return
         print()
 
-sys.path.append(os.path.abspath('../lifx'))
+sys.path.append(os.path.abspath('lifx'))
 from lifx import Controller
 from lifx import Light
 
