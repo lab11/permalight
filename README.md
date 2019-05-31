@@ -14,6 +14,7 @@ receives these MQTT messages and alters its control scheme accordingly.
 ## JSON Format
 Permalight currently supports the following commands:
 - enable
+- on
 - set_point
 - bright
 - dim
@@ -26,6 +27,14 @@ following:
 {
   "light_name": "Branden's light",
   "action": "enable",
+  "value": {0,1}
+}
+```
+### on
+The `on` command runs the enable command on all lights. Use this command to enable/disable every light in the system.
+```
+{
+  "action": "on",
   "value": {0,1}
 }
 ```

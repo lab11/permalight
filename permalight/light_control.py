@@ -208,7 +208,13 @@ class LightControl:
 
     def control_on_message(self, client, userdata, msg):
         data = json.loads(msg.payload.decode('utf-8'))
-        light_name = data['light_name']
+        light_name = ''
+        if 'light_name' in data: 
+            light_name = data['light_name']
+        if 'on' in data:
+            for name in self.sensorIdToSensor:
+                self.sensorIdToSensor[name].enable = bool(data['on'])
+            return
         if light_name not in self.lightNameToLights:
             print("light does not exist")
             return

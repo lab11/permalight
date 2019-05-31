@@ -42,8 +42,10 @@ mqtt_client.on('connect', function () {
 });
 
 process_request = function(req, res) {
-  var light = req.body.light_name;
-  debug('Light: ' + light);
+  if ("light_name" in req.body) {
+    var light = req.body.light_name;
+    debug('Light: ' + light);
+  }
   var action = req.body.action;
   debug('Action: ' + action);
   if (req.method == 'GET') {
@@ -51,7 +53,7 @@ process_request = function(req, res) {
     return;
   }
   else if (req.method == 'POST') {
-    if (action === 'enable') {
+    if (action === 'enable' || action === 'on') {
       var value = parseInt(req.body.value, 10);
       debug('Value: ' + value);
       if (isNaN(value)) {
@@ -63,7 +65,11 @@ process_request = function(req, res) {
         return;
       }
       value = Boolean(value);
-      payload = {light_name: light, enable: value};
+      payload = {};
+      if (action == 'enable'){
+        payload[light_name] =  light;
+      }
+      payload[action] = value;
       mqtt_client.publish(MQTT_TOPIC_NAME + '/' + light, JSON.stringify(payload), {retain: true});
       res.status(200).send(JSON.stringify({ result: 'Success!' }));
       return;
