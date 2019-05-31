@@ -52,7 +52,7 @@ Similarly, the dim command decreases the set_point of a light by 25 lux
 ```
 {
   "light_name": "Branden's light",
-  "action": "bright"
+  "action": "dim"
 }
 ```
 
