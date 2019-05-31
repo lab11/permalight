@@ -56,6 +56,11 @@ Similarly, the dim command decreases the set_point of a light by 25 lux
 }
 ```
 
-
+### An example using curl:
+```
+curl -L --header "Content-Type: application/json" --request POST -d \
+"{\"light_name\": \"Branden's light\", \"action\": \"set_point\", \"value\": 250}" \
+-u admin:password permalight.eecs.berkeley.edu/permalight
+```
 
 
