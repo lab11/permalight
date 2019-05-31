@@ -281,11 +281,13 @@ class LightControl:
         else: return
         print()
 
-sys.path.append(os.path.abspath('lifx'))
+wd = os.path.dirname(os.path.realpath(__file__))
+print(wd)
+sys.path.append(wd + '/lifx')
 from lifx import Controller
 from lifx import Light
 
-config_fname = 'config.yaml'
+config_fname = wd +'/config.yaml'
 with open(config_fname, 'r') as f:
   config = yaml.safe_load(f)
 
