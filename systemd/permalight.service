@@ -1,7 +1,7 @@
 [Unit]
 Description=Permalight dynamic light control
-Wants=networking.service
-After=networking.service
+Wants=network-online.target networking.service NetworkManager.service
+After=network-online.target networking.service NetworkManager.service
 
 [Service]
 ExecStart=/home/pi/permalight/permalight/light_control.py
