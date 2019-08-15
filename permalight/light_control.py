@@ -125,6 +125,7 @@ class LightControl:
             #TODO read in mapping
             for sensor_id in occ_light_map:
                 self.occSensorIdToLightName[sensor_id] = occ_light_map[sensor_id]
+                self.sensorIdToSensor[sensor_id] = LightSensor(sensor_id)
 
         # TODO pick lights/sensors/mapping out of saved data
 
@@ -155,15 +156,20 @@ class LightControl:
             if (time_check - time_start).total_seconds() >= self.motionTimeout:
                 time_start = datetime.datetime.now()
                 for sensor_id in self.occSensorIdToLightName:
+                    # get light associated with occ sensor
                     light_id = self.occSensorIdToLightName[sensor_id]
+                    # get light sensor associated with light
+                    light_sensor_id = self.lightNameToSensorId[light_id]
                     # if control for this light/sensor pair is disabled, don't turn off light
-                    if self.sensorIdToSensor[sensor_id].enable == 0: continue
-                    if self.sensorIdToSensor[sensor_id].motion == 0:
-                        print("have not seen motion, turning off light %s" % light_id)
-                        self.lightNameToLights[light_id].off()
-                    self.sensorIdToSensor[sensor_id].motion = 0
+                    if light_sensor_id in self.sensorIdToSensor:
+                        if self.sensorIdToSensor[light_sensor_id].enable == 0: continue
+                        if self.sensorIdToSensor[sensor_id].motion == 0:
+                            print("have not seen motion, turning off light %s" % light_id)
+                            self.lightNameToLights[light_id].off()
+                        self.sensorIdToSensor[sensor_id].motion = 0
 
     def _update_light(self, sensor_id):
+        if sensor_id not in self.lightSensorIdToLightName: return
         light_id = self.lightSensorIdToLightName[sensor_id]
         light_to_update = self.lightNameToLights[light_id]
 
@@ -273,7 +279,7 @@ class LightControl:
                     print(e)
                     traceback.print_exc()
         elif 'motion' in data:
-            if len(self.occSensorIdToLightName) == 0: return
+            if len(self.occSensorIdToLightName) == 0 or device_id not in self.occSensorIdToLightName: return
             print(device_id)
             print('Saw motion!')
             light_id = self.occSensorIdToLightName[device_id]
