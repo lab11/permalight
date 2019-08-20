@@ -30,6 +30,7 @@ class LightControl:
         self.lightSensorIdToLightName = {}
         self.lightNameToSensorId = {}
         self.occSensorIdToLightName = {}
+        self.lightNameToOccSensorId= {}
 
         # keep track of discovered sensors
         self.sensorIdToSensor = {}
@@ -125,6 +126,7 @@ class LightControl:
             #TODO read in mapping
             for sensor_id in occ_light_map:
                 self.occSensorIdToLightName[sensor_id] = occ_light_map[sensor_id]
+                self.lightNameToOccSensorId[occ_light_map[sensor_id]] = sensor_id
                 self.sensorIdToSensor[sensor_id] = LightSensor(sensor_id)
 
         # TODO pick lights/sensors/mapping out of saved data
@@ -177,7 +179,7 @@ class LightControl:
         # if control for this light/sensor pair is disabled, don't turn off light
         print(self.lightNameToLights[light_id].get_state())
         print(self.sensorIdToSensor[sensor_id].motion)
-        if not self.lightNameToLights[light_id].get_state() and not self.sensorIdToSensor[sensor_id].motion \
+        if not self.lightNameToLights[light_id].get_state()\
                 or self.sensorIdToSensor[sensor_id].enable == 0:
             print("control disabled, not updating light")
             return
@@ -215,7 +217,7 @@ class LightControl:
     def control_on_message(self, client, userdata, msg):
         data = json.loads(msg.payload.decode('utf-8'))
         light_name = ''
-        if 'light_name' in data: 
+        if 'light_name' in data:
             light_name = data['light_name']
         if 'on' in data:
             for name in self.sensorIdToSensor:
@@ -295,7 +297,7 @@ class LightControl:
 
 wd = os.path.dirname(os.path.realpath(__file__))
 print(wd)
-sys.path.append(wd + '/lifx')
+sys.path.append(wd + '/lifx-lock')
 from lifx import Controller
 from lifx import Light
 
@@ -303,7 +305,8 @@ config_fname = wd +'/config.yaml'
 with open(config_fname, 'r') as f:
   config = yaml.safe_load(f)
 
-controller = Controller()
+lock_server = "http://165.22.170.110:4000/"
+controller = Controller(lock_server)
 
 lightcontrol = LightControl(config['mqtt_addr'])
 #TODO add inputs for lights, mapping of sensors to lights
