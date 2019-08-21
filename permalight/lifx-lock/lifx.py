@@ -42,8 +42,9 @@ class Light():
                 r = requests.get(url+ "/request", json=data)
                 data = r.json()
                 if not data["success"]:
-                    print("light lock already held, sleeping " + str(data["remaining_time_seconds"]))
-                    time.sleep(data["remaining_time_seconds"]+0.2)
+                    if "remaining_time_seconds" in data:
+                        print("light lock already held, sleeping " + str(data["remaining_time_seconds"]))
+                        time.sleep(data["remaining_time_seconds"]+0.2)
                 else:
                     token = data["lock"]["token"]
                     break

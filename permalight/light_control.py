@@ -30,7 +30,6 @@ class LightControl:
         self.lightSensorIdToLightName = {}
         self.lightNameToSensorId = {}
         self.occSensorIdToLightName = {}
-        self.lightNameToOccSensorId= {}
 
         # keep track of discovered sensors
         self.sensorIdToSensor = {}
@@ -126,7 +125,6 @@ class LightControl:
             #TODO read in mapping
             for sensor_id in occ_light_map:
                 self.occSensorIdToLightName[sensor_id] = occ_light_map[sensor_id]
-                self.lightNameToOccSensorId[occ_light_map[sensor_id]] = sensor_id
                 self.sensorIdToSensor[sensor_id] = LightSensor(sensor_id)
 
         # TODO pick lights/sensors/mapping out of saved data
