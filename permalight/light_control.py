@@ -163,7 +163,7 @@ class LightControl:
                     # if control for this light/sensor pair is disabled, don't turn off light
                     if light_sensor_id in self.sensorIdToSensor:
                         if self.sensorIdToSensor[light_sensor_id].enable == 0: continue
-                        if self.sensorIdToSensor[sensor_id].motion == 0:
+                        if self.sensorIdToSensor[sensor_id].motion == 0 and light_id in self.lightNameToLights:
                             print("have not seen motion, turning off light %s" % light_id)
                             self.lightNameToLights[light_id].off()
                         self.sensorIdToSensor[sensor_id].motion = 0
@@ -201,8 +201,8 @@ class LightControl:
     def start_control_loop(self):
         self.state = self.state.CONTROL
         # toggle the lights just to get initial measurements
-        self.all_off()
-        time.sleep(2)
+        #self.all_off()
+        #time.sleep(2)
         self.all_on()
         # start motion watchdog
         self._motion_watchdog()
